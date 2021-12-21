@@ -1,109 +1,185 @@
 import * as anchor from '@project-serum/anchor';
-const { PublicKey } = anchor.web3;
+const BN = require('bn.js');
+const expect = require('chai').expect;
+const { PublicKey, SystemProgram, LAMPORTS_PER_SOL } = anchor.web3;
 const assert = require("assert");
 
 describe('trainer', () => {
+    console.log("🚀 Starting test...");
+
     // Configure the client to use the local cluster.
-    anchor.setProvider(anchor.Provider.env());
+    const provider = anchor.Provider.env();
+    anchor.setProvider(provider);
   
     // Program client handle.
-    const program = anchor.workspace.Trainer;
-  
-    // Strategy account.
-    const strategy = anchor.web3.Keypair.generate();
+    const trainerProgram = anchor.workspace.Trainer;
 
-    // Strategy name.
-    const strategyName = "test-strategy";
+    function expectBalance(actual, expected, message, slack=20000) {
+      expect(actual, message).within(expected - slack, expected + slack)
+    }
   
-    it("Creates a strategy", async () => {
-      await program.rpc.createStrategy(strategyName, {
-        accounts: {
-          strategy: strategy.publicKey,
-          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        },
-        instructions: [
-          await program.account.strategy.createInstruction(strategy),
-        ],
-        signers: [strategy],
-      });
+    async function createUser(airdropBalance = 10 * LAMPORTS_PER_SOL) {
+      let user = anchor.web3.Keypair.generate();
+      let sig = await provider.connection.requestAirdrop(user.publicKey, airdropBalance);
+      await provider.connection.confirmTransaction(sig);
   
-      const testStrategy = await program.account.strategy.fetch(strategy.publicKey);
-      const name = new TextDecoder("utf-8").decode(new Uint8Array(testStrategy.name));
-      assert.ok(name.startsWith(strategyName)); // [u8; 280] => trailing zeros.
-      assert.ok(testStrategy.exerciseAnswers.length === 33607);
-      assert.ok(testStrategy.head.toNumber() === 0);
-      assert.ok(testStrategy.tail.toNumber() === 0);
-    });
+      let wallet = new anchor.Wallet(user);
+      let userProvider = new anchor.Provider(provider.connection, wallet, provider.opts);
   
-    it("Creates a user", async () => {
-      const authority = program.provider.wallet.publicKey;
-      const [user, bump] = await PublicKey.findProgramAddress(
-        [authority.toBuffer()],
-        program.programId
-      );
-      await program.rpc.createUser("My User", bump, {
-        accounts: {
-          user,
-          authority,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        },
-      });
-      const account = await program.account.user.fetch(user);
-      assert.ok(account.name === "My User");
-      assert.ok(account.authority.equals(authority));
-    });
+      return {
+        key: user,
+        wallet,
+        provider: userProvider,
+      };
+    }
   
-    it("Sends exercise answers", async () => {
-      const authority = program.provider.wallet.publicKey;
-      const user = (
-        await PublicKey.findProgramAddress(
-          [authority.toBuffer()],
-          program.programId
-        )
-      )[0];
-  
-      // Only send a couple exercise answers so the test doesn't take an eternity.
-      const numExerciseAnswers = 10;
-  
-      // Generate random exercise answers strings.
-      const exerciseAnswers = new Array(numExerciseAnswers).fill("").map((msg) => {
-        return (
-          Math.random().toString(36).substring(2, 15) +
-          Math.random().toString(36).substring(2, 15)
-        );
-      });
-  
-      // Send each exercise answer.
-      for (let k = 0; k < numExerciseAnswers; k += 1) {
-        console.log("Sending exercise answer " + k);
-        await program.rpc.checkExerciseAnswer(exerciseAnswers[k], {
-          accounts: {
-            user,
-            authority,
-            strategy: strategy.publicKey,
-          },
-        });
+    function createUsers(numUsers) {
+      let promises = [];
+      for(let i = 0; i < numUsers; i++) {
+        promises.push(createUser());
       }
   
-      // Check the strategy state is as expected.
-      const testStrategy = await program.account.strategy.fetch(strategy.publicKey);
-      const name = new TextDecoder("utf-8").decode(new Uint8Array(testStrategy.name));
-      assert.ok(name.startsWith(strategyName)); // [u8; 280] => trailing zeros.
-      assert.ok(testStrategy.exerciseAnswers.length === 33607);
-      assert.ok(testStrategy.head.toNumber() === numExerciseAnswers);
-      assert.ok(testStrategy.tail.toNumber() === 0);
-      testStrategy.exerciseAnswers.forEach((msg, idx) => {
-        if (idx < 10) {
-          const data = new TextDecoder("utf-8").decode(new Uint8Array(msg.data));
-          console.log("Exercise answer", idx + ":", data);
-          assert.ok(msg.from.equals(user));
-          assert.ok(data.startsWith(exerciseAnswers[idx]));
-        } else {
-          assert.ok(anchor.web3.PublicKey.default);
-          assert.ok(
-            JSON.stringify(msg.data) === JSON.stringify(new Array(280).fill(0))
-          );
-        }
+      return Promise.all(promises);
+    }
+  
+    async function getAccountBalance(pubkey) {
+      let account = await provider.connection.getAccountInfo(pubkey);
+      return account?.lamports ?? 0;
+    }
+  
+    function programForUser(user) {
+      return new anchor.Program(trainerProgram.idl, trainerProgram.programId, user.provider);
+    }
+    
+    async function createTrader(user) {
+      const [traderPublicKey, bump] = await anchor.web3.PublicKey.findProgramAddress([
+        "trader",
+        user.key.publicKey.toBytes()
+      ], trainerProgram.programId);
+
+      let program = programForUser(user);
+      await program.rpc.createTrader(bump, {
+        accounts: {
+          trader: traderPublicKey,
+          user: user.key.publicKey,
+          systemProgram: SystemProgram.programId,
+        },
       });
+  
+      return {publicKey: traderPublicKey, account: await program.account.trader.fetch(traderPublicKey)};
+    }
+
+    async function updateTraderAccount(user, trader) {  
+      let program = programForUser(user);
+      return {publicKey: trader.publicKey, account: await program.account.trader.fetch(trader.publicKey)};
+    }
+
+    async function createExercise(authority, cid) {
+      const [exercisePublicKey, bump] = await anchor.web3.PublicKey.findProgramAddress([
+        "exercise",
+        authority.key.publicKey.toBytes(),
+        cid.slice(0, 32)
+      ], trainerProgram.programId);
+
+      let program = programForUser(authority);
+      await program.rpc.createExercise(cid, bump, {
+        accounts: {
+          exercise: exercisePublicKey,
+          authority: authority.key.publicKey,
+          systemProgram: SystemProgram.programId,
+        },
+      });
+  
+      return {publicKey: exercisePublicKey, account: await program.account.exercise.fetch(exercisePublicKey)};
+    }
+
+    async function addPrediction(user, trader, exercise, authority, value, cid) {
+      let program = programForUser(user);
+      await program.rpc.addPrediction(new anchor.BN(value), cid, {
+        accounts: {
+          exercise: exercise.publicKey,
+          authority: authority.key.publicKey,
+          trader: trader.publicKey,
+          user: user.key.publicKey,
+        },
+      });
+  
+      return {publicKey: exercise.publicKey, account: await program.account.exercise.fetch(exercise.publicKey)};
+    }
+
+    async function addOutcome(exercise, authority, outcome, cid) {
+      let program = programForUser(authority);
+      await program.rpc.addOutcome(new anchor.BN(outcome), cid, {
+        accounts: {
+          exercise: exercise.publicKey,
+          authority: authority.key.publicKey,
+        },
+      });
+  
+      return {publicKey: exercise.publicKey, account: await program.account.exercise.fetch(exercise.publicKey)};
+    }
+
+    async function checkPrediction(user, trader, exercise, authority, index, cid) {
+      let program = programForUser(authority);
+      await program.rpc.checkPrediction(new anchor.BN(index), cid, {
+        accounts: {
+          exercise: exercise.publicKey,
+          authority: authority.key.publicKey,
+          trader: trader.publicKey, 
+          user: user.key.publicKey,
+        },
+      });
+    }
+
+    it("Creates a trader", async () => {
+      const user = await createUser();
+      const trader = await createTrader(user);
+      
+      expect(trader.account.user.toString(), 'Trader user is set').equals(user.key.publicKey.toString());
     });
+
+    it("Creates a exercice", async () => {
+      const authority = await createUser();
+      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+
+      expect(exercice.account.authority.toString(), 'Exercice authority is set').equals(authority.key.publicKey.toString());
+      expect(exercice.account.cid, 'Exercice cid is set').equals("bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+    }); 
+
+    it("Add a prediction", async () => {
+      const authority = await createUser();
+      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const user = await createUser();
+      const trader = await createTrader(user);
+
+      const updatedExercise = await addPrediction(user, trader, exercice, authority, 30, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const predictions = updatedExercise.account.predictions;
+      expect(predictions.length, 'Prediction added').greaterThan(0);
+      const prediction = predictions[predictions.length - 1];
+      expect(prediction.value.toNumber(), 'Prediction value is set').equals(30);
+      expect(prediction.trader.toString(), 'Prediction trader is set').equals(trader.publicKey.toString());
+    }); 
+
+    it("Add a outcome", async () => {
+      const authority = await createUser();
+      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+
+      const updatedExercise = await addOutcome(exercice, authority, 30, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      expect(updatedExercise.account.outcome.toNumber(), 'Outcome is set').equals(30);
+    }); 
+
+    it("Check a prediction", async () => {
+      const authority = await createUser();
+      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const user = await createUser();
+      const trader = await createTrader(user);
+
+      const updatedExercisePrediction = await addPrediction(user, trader, exercice, authority, 20, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      expect(updatedExercisePrediction.account.predictions.length, 'Prediction added').greaterThan(0);
+      const updatedExerciseOutcome = await addOutcome(exercice, authority, 30, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      expect(updatedExerciseOutcome.account.outcome.toNumber(), 'Outcome is set').equals(30);
+      await checkPrediction(user, trader, exercice, authority, 0, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const updatedTrader = await updateTraderAccount(user, trader);
+      expect(updatedTrader.account.performance.toNumber(), 'Outcome is set').equals(8);
+    }); 
   });

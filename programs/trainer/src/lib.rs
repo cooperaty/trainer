@@ -8,34 +8,39 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod trainer {
     use super::*;
 
-    pub fn create_trader(ctx: Context<CreateTrader>, bump: u8) -> Result<()> {
+    pub fn create_trader(ctx: Context<CreateTrader>, name: String, bump: u8) -> Result<()> {
         let trader = &mut ctx.accounts.trader;
         trader.user = *ctx.accounts.user.key;
+        trader.name = name;
         trader.bump = bump;
+
+        msg!("[TRAD] E: {}", &*trader.to_account_info().key.to_string());
         Ok(())
     }
 
-    pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, bump: u8) -> Result<()> {
+    pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, predictions_capacity: u8, bump: u8) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.full = false;
         exercise.cid = cid;
         exercise.authority = *ctx.accounts.authority.key;
+        exercise.predictions_capacity = predictions_capacity;
         exercise.bump = bump;
+
+        msg!("[EXER] E: {}", exercise.cid);
         Ok(())
     }
 
     pub fn add_prediction(ctx: Context<AddPrediction>, value: i64, cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         let trader = &mut ctx.accounts.trader;
-        msg!("adding prediction {} to exercise {}", value, cid);
-
+        
         // check user have not already added a prediction
         for prediction in exercise.predictions.iter() {
             if prediction.trader == *trader.to_account_info().key {
                 return Err(ErrorCode::DuplicatedPrediction.into());
             }
         }
-
+        
         // add the prediction to the exercise
         let prediction = Prediction {
             value,
@@ -43,36 +48,41 @@ pub mod trainer {
         };
         exercise.predictions.push(prediction);
 
+        msg!(&*trader.to_account_info().key.to_string());
+        msg!("[PRED] E: {} P: {} I: {}", cid, value, exercise.predictions.len() - 1);
+
         Ok(())
     }
 
     pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.outcome = outcome;
-        msg!("checking exercise {} with outcome {}", cid, outcome);
+
+        msg!("[OUTCOME] E: {} Ps: {} O: {}", cid, outcome, exercise.predictions.len());
 
         Ok(())
     }
 
-    pub fn check_prediction(ctx: Context<CheckPrediction>, index: u8, cid: String) -> Result<()> {
+    pub fn check_prediction(ctx: Context<CheckPrediction>, index: u8, _cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         let authority = &ctx.accounts.authority;
         let trader = &mut ctx.accounts.trader;
-        let prediction = &exercise.predictions[index as usize];
-        msg!("checking prediction {} of exercise {}", index, cid);
-        
+        let prediction = exercise.predictions.get(index as usize).ok_or_else(|| ErrorCode::InvalidPredictionIndex)?;
+
         // if trader is not the prediction's trader, then the prediction is invalid
         if *trader.to_account_info().key != prediction.trader {
             return Err(ErrorCode::WrongPredictionIndex.into());
         }
+        
+        let rate = cmp::max(100-(prediction.value - exercise.outcome).abs(), 0) as u64;
+        let performance = (trader.performance + rate) / 2;
+        trader.performance = performance;
 
-        let proximity = (prediction.value - exercise.outcome).abs() as u64;
-        let rate = 200 / (cmp::min(proximity, 198) + 2);
-        trader.performance = (trader.performance + rate) / 2;
-
+        msg!("[CHECK] E: {} PP: {} PV: {}", index, performance, prediction.value);
+        
         // remove the prediction from the exercise to assure that it is not checked again
         exercise.predictions.remove(index as usize);
-
+        
         if exercise.predictions.len() == 0 {
             exercise.close(authority.to_account_info())?;
         }
@@ -93,16 +103,17 @@ fn text_seed(text: &str) -> &[u8] {
 }
 
 #[derive(Accounts)]
-#[instruction(bump: u8)]
+#[instruction(name: String, bump: u8)]
 pub struct CreateTrader<'info> {
     #[account(
         init,
         payer = user,
         seeds = [
             b"trader",
+            text_seed(&name),
             user.to_account_info().key.as_ref()],
         bump = bump,
-        space = 320,
+        space = Trader::space(&name),
     )]
     pub trader: Account<'info, Trader>,
     pub user: Signer<'info>,
@@ -110,7 +121,7 @@ pub struct CreateTrader<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(cid: String, bump: u8)]
+#[instruction(cid: String, predictions_capacity: u8, bump: u8)]
 pub struct CreateExercise<'info> {
     #[account(
         init,
@@ -120,7 +131,7 @@ pub struct CreateExercise<'info> {
             text_seed(&cid)],
         bump = bump,
         payer = authority,
-        space = 320,
+        space = Exercise::space(&cid, predictions_capacity),
     )]
     pub exercise: Account<'info, Exercise>,
     pub authority: Signer<'info>,
@@ -142,7 +153,8 @@ pub struct AddPrediction<'info> {
     #[account(mut, 
         has_one = user @ ErrorCode::WrongUser, 
         seeds = [
-            b"trader", 
+            b"trader",
+            text_seed(&trader.name), 
             user.key().as_ref()],
         bump=trader.bump)]
     pub trader: Account<'info, Trader>,
@@ -179,6 +191,7 @@ pub struct CheckPrediction<'info> {
         has_one = user @ ErrorCode::WrongUser, 
         seeds = [
             b"trader", 
+            text_seed(&trader.name), 
             user.key().as_ref()],
         bump=trader.bump)]
     pub trader: Account<'info, Trader>,
@@ -188,8 +201,19 @@ pub struct CheckPrediction<'info> {
 #[account]
 pub struct Trader {
     pub user: Pubkey,
+    pub name: String,
     pub performance: u64,
     pub bump: u8,
+}
+
+// Calculate the trader's data space
+impl Trader {
+    fn space(name: &str) -> usize {
+        // discriminator
+        8 +
+        // user + name + performance + bump
+        32 + (4 + name.len()) + 8 + 1
+    }
 }
 
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
@@ -203,9 +227,24 @@ pub struct Exercise {
     pub full: bool,
     pub cid: String,
     pub authority: Pubkey,
-    pub predictions: Vec<Prediction>,
     pub outcome: i64,
+    pub predictions_capacity: u8,
+    pub predictions: Vec<Prediction>,
     pub bump: u8,
+}
+
+// Calculate the vote's data space
+impl Exercise {
+    fn space(cid: &str, predictions_capacity: u8) -> usize {
+        // discriminator
+        8 +
+        // full + cid + authority + outcome + predictions_capacity +
+        1 + (4 + cid.len()) + 32 + 8 + 1 +
+        // vec of predictions +
+        4 + (predictions_capacity as usize) * std::mem::size_of::<Prediction>() +
+        // bump
+        1
+    }
 }
 
 #[error]
@@ -218,4 +257,6 @@ pub enum ErrorCode {
     WrongPredictionIndex,
     #[msg("Trader have already added a prediction")]
     DuplicatedPrediction,
+    #[msg("Invalid prediction index")]
+    InvalidPredictionIndex
 }

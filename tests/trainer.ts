@@ -51,14 +51,15 @@ describe('trainer', () => {
       return new anchor.Program(trainerProgram.idl, trainerProgram.programId, user.provider);
     }
     
-    async function createTrader(user) {
+    async function createTrader(user, name) {
       const [traderPublicKey, bump] = await anchor.web3.PublicKey.findProgramAddress([
         "trader",
+        name.slice(0, 32),
         user.key.publicKey.toBytes()
       ], trainerProgram.programId);
 
       let program = programForUser(user);
-      await program.rpc.createTrader(bump, {
+      await program.rpc.createTrader(name, bump, {
         accounts: {
           trader: traderPublicKey,
           user: user.key.publicKey,
@@ -74,7 +75,7 @@ describe('trainer', () => {
       return {publicKey: trader.publicKey, account: await program.account.trader.fetch(trader.publicKey)};
     }
 
-    async function createExercise(authority, cid) {
+    async function createExercise(authority, cid, predictions_capacity = 5) {
       const [exercisePublicKey, bump] = await anchor.web3.PublicKey.findProgramAddress([
         "exercise",
         authority.key.publicKey.toBytes(),
@@ -82,7 +83,7 @@ describe('trainer', () => {
       ], trainerProgram.programId);
 
       let program = programForUser(authority);
-      await program.rpc.createExercise(cid, bump, {
+      await program.rpc.createExercise(cid, predictions_capacity, bump, {
         accounts: {
           exercise: exercisePublicKey,
           authority: authority.key.publicKey,
@@ -131,28 +132,55 @@ describe('trainer', () => {
       });
     }
 
+    async function checkMultiplePredictions(users, traders, exercise, authority, index, cid) {
+      let program = programForUser(authority);
+      let instructions = [];
+      let lastTraderIndex = users.length - 1;
+
+      for(let i = 0; i < lastTraderIndex; i++) {
+        instructions.push(program.instruction.checkPrediction(new anchor.BN(index), cid, {
+          accounts: {
+            exercise: exercise.publicKey,
+            authority: authority.key.publicKey,
+            trader: traders[i].publicKey, 
+            user: users[i].key.publicKey,
+        }}));
+      }
+
+      await program.rpc.checkPrediction(new anchor.BN(index), cid, {
+        accounts: {
+          exercise: exercise.publicKey,
+          authority: authority.key.publicKey,
+          trader: traders[lastTraderIndex].publicKey, 
+          user: users[lastTraderIndex].key.publicKey,
+        },
+        instructions,
+      });
+    }
+
     it("Creates a trader", async () => {
       const user = await createUser();
-      const trader = await createTrader(user);
+      const trader = await createTrader(user, 'Trader');
       
       expect(trader.account.user.toString(), 'Trader user is set').equals(user.key.publicKey.toString());
+      expect(trader.account.name, 'Trader name is set').equals('Trader');
     });
 
     it("Creates a exercice", async () => {
       const authority = await createUser();
-      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const exercice = await createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
 
       expect(exercice.account.authority.toString(), 'Exercice authority is set').equals(authority.key.publicKey.toString());
-      expect(exercice.account.cid, 'Exercice cid is set').equals("bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      expect(exercice.account.cid, 'Exercice cid is set').equals("QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
     }); 
 
     it("Add a prediction", async () => {
       const authority = await createUser();
-      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const exercice = await createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
       const user = await createUser();
-      const trader = await createTrader(user);
+      const trader = await createTrader(user, 'Trader');
 
-      const updatedExercise = await addPrediction(user, trader, exercice, authority, 30, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const updatedExercise = await addPrediction(user, trader, exercice, authority, 30, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
       const predictions = updatedExercise.account.predictions;
       expect(predictions.length, 'Prediction added').greaterThan(0);
       const prediction = predictions[predictions.length - 1];
@@ -162,24 +190,57 @@ describe('trainer', () => {
 
     it("Add a outcome", async () => {
       const authority = await createUser();
-      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const exercice = await createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
 
-      const updatedExercise = await addOutcome(exercice, authority, 30, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const updatedExercise = await addOutcome(exercice, authority, 30, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
       expect(updatedExercise.account.outcome.toNumber(), 'Outcome is set').equals(30);
     }); 
 
     it("Check a prediction", async () => {
       const authority = await createUser();
-      const exercice = await createExercise(authority, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const exercice = await createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
       const user = await createUser();
-      const trader = await createTrader(user);
+      const trader = await createTrader(user, 'Trader');
 
-      const updatedExercisePrediction = await addPrediction(user, trader, exercice, authority, 20, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const updatedExercisePrediction = await addPrediction(user, trader, exercice, authority, 20, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
       expect(updatedExercisePrediction.account.predictions.length, 'Prediction added').greaterThan(0);
-      const updatedExerciseOutcome = await addOutcome(exercice, authority, 30, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      const updatedExerciseOutcome = await addOutcome(exercice, authority, 30, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
       expect(updatedExerciseOutcome.account.outcome.toNumber(), 'Outcome is set').equals(30);
-      await checkPrediction(user, trader, exercice, authority, 0, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+      await checkPrediction(user, trader, exercice, authority, 0, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
       const updatedTrader = await updateTraderAccount(user, trader);
       expect(updatedTrader.account.performance.toNumber(), 'Outcome is set').equals(8);
+    }); 
+
+    it("Check predictions", async () => {
+      const predictions_capacity = 7;
+      const authority = await createUser();
+      const exercice = await createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW", predictions_capacity);
+      const users = await createUsers(predictions_capacity);
+      const predictions = [-100, -50, -10, 0, 10, 50, 100];
+      // https://www.desmos.com/calculator/mqmwlpkyri
+      const performance = [0, 10, 30, 35, 40, 40, 15];
+      let traders = [];
+
+      for (let i = 0; i < predictions_capacity; i++) {
+        let user = users[i];
+        let trader = await createTrader(user, 'Trader');
+
+        let updatedExercisePrediction = await addPrediction(user, trader, exercice, authority, predictions[i], "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+        expect(updatedExercisePrediction.account.predictions.length, 'Prediction added').equals(i+1);
+        
+        traders.push(trader);
+      }
+      
+      const updatedExerciseOutcome = await addOutcome(exercice, authority, 30, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      expect(updatedExerciseOutcome.account.outcome.toNumber(), 'Outcome is set').equals(30);
+
+      await checkMultiplePredictions(users, traders, exercice, authority, 0,"QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      
+      for (let j = 0; j < predictions_capacity; j++) {
+        let user = users[j];
+        let trader = traders[j];
+        const updatedTrader = await updateTraderAccount(user, trader);
+        expect(updatedTrader.account.performance.toNumber(), 'Performance is set').equals(performance[j]);
+      }
     }); 
   });

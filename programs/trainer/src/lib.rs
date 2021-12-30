@@ -54,9 +54,10 @@ pub mod trainer {
         Ok(())
     }
 
-    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, cid: String) -> Result<()> {
+    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, solution_key: Pubkey, cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.outcome = outcome;
+        exercise.solution_key = solution_key;
 
         msg!("[OUTCOME] E: {} Ps: {} O: {}", cid, outcome, exercise.predictions.len());
 
@@ -93,10 +94,18 @@ pub mod trainer {
 
 // Function to retrieve a max of 32 bytes from a string
 // Used to generate a PDA
-fn text_seed(text: &str) -> &[u8] {
+fn text_seed(text: &str, leftover: bool) -> &[u8] {
     let b = text.as_bytes();
     if b.len() > 32 {
-        &b[0..32]
+        if leftover {
+            if b.len() > 64 {
+                &b[32..64]
+            } else {
+                &b[32..] 
+            }
+        } else {
+            &b[0..32]
+        }
     } else {
         b
     }
@@ -110,7 +119,7 @@ pub struct CreateTrader<'info> {
         payer = user,
         seeds = [
             b"trader",
-            text_seed(&name),
+            text_seed(&name, false),
             user.to_account_info().key.as_ref()],
         bump = bump,
         space = Trader::space(&name),
@@ -128,7 +137,8 @@ pub struct CreateExercise<'info> {
         seeds = [
             b"exercise", 
             authority.to_account_info().key.as_ref(),
-            text_seed(&cid)],
+            text_seed(&cid, false),
+            text_seed(&cid, true)],
         bump = bump,
         payer = authority,
         space = Exercise::space(&cid, predictions_capacity),
@@ -146,7 +156,8 @@ pub struct AddPrediction<'info> {
         seeds = [
             b"exercise", 
             authority.key().as_ref(),
-            text_seed(&cid)],
+            text_seed(&cid, false),
+            text_seed(&cid, true)],
         bump=exercise.bump)]
     pub exercise: Account<'info, Exercise>,
     pub authority: AccountInfo<'info>,
@@ -154,7 +165,7 @@ pub struct AddPrediction<'info> {
         has_one = user @ ErrorCode::WrongUser, 
         seeds = [
             b"trader",
-            text_seed(&trader.name), 
+            text_seed(&trader.name, false), 
             user.key().as_ref()],
         bump=trader.bump)]
     pub trader: Account<'info, Trader>,
@@ -162,14 +173,15 @@ pub struct AddPrediction<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(outcome: i64, cid: String)]
+#[instruction(outcome: i64, solution_key: Pubkey, cid: String)]
 pub struct AddOutcome<'info> {
     #[account(mut, 
         has_one = authority @ ErrorCode::WrongExerciseCreator, 
         seeds = [
             b"exercise", 
             authority.to_account_info().key.as_ref(),
-            text_seed(&cid)],
+            text_seed(&cid, false),
+            text_seed(&cid, true)],
         bump=exercise.bump)]
     pub exercise: Account<'info, Exercise>,
     pub authority: Signer<'info>
@@ -183,7 +195,8 @@ pub struct CheckPrediction<'info> {
         seeds = [
             b"exercise", 
             authority.key().as_ref(),
-            text_seed(&cid)],
+            text_seed(&cid, false),
+            text_seed(&cid, true)],
         bump=exercise.bump)]
     pub exercise: Account<'info, Exercise>,
     pub authority: Signer<'info>,
@@ -191,7 +204,7 @@ pub struct CheckPrediction<'info> {
         has_one = user @ ErrorCode::WrongUser, 
         seeds = [
             b"trader", 
-            text_seed(&trader.name), 
+            text_seed(&trader.name, false), 
             user.key().as_ref()],
         bump=trader.bump)]
     pub trader: Account<'info, Trader>,
@@ -228,6 +241,7 @@ pub struct Exercise {
     pub cid: String,
     pub authority: Pubkey,
     pub outcome: i64,
+    pub solution_key: Pubkey,
     pub predictions_capacity: u8,
     pub predictions: Vec<Prediction>,
     pub bump: u8,
@@ -238,8 +252,8 @@ impl Exercise {
     fn space(cid: &str, predictions_capacity: u8) -> usize {
         // discriminator
         8 +
-        // full + cid + authority + outcome + predictions_capacity +
-        1 + (4 + cid.len()) + 32 + 8 + 1 +
+        // full + cid + authority + outcome + solution_key + predictions_capacity +
+        1 + (4 + cid.len()) + 32 + 8 + 32 + 1 +
         // vec of predictions +
         4 + (predictions_capacity as usize) * std::mem::size_of::<Prediction>() +
         // bump

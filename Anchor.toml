@@ -1,12 +1,15 @@
 [programs.localnet]
-trainer = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+trainer = "diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD"
 
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
 cluster = "localnet"
-wallet = "/Users/macbookproretina/.config/solana/id.json"
+wallet = "~/.config/solana/id.json"
+
+[workspace]
+members = ["programs/trainer"]
 
 [scripts]
-test = "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "ts-mocha -p ./tsconfig.json -t 1000000"

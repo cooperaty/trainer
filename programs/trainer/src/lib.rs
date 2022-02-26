@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
 use std::cmp;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD");
 
 #[program]
 pub mod trainer {

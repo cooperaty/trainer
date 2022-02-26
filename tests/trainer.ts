@@ -1,58 +1,52 @@
 import * as anchor from '@project-serum/anchor';
-import Client from './client';
+import { TrainerSDK } from '../src';
 const expect = require('chai').expect;
+import { SDK } from "./workspace";
 
 describe('trainer', () => {
     console.log("🚀 Starting test...");
 
-    const provider = anchor.Provider.env();
-    anchor.setProvider(provider);
-  
-    const trainerProgram = anchor.workspace.Trainer;
-
-    const client = new Client(provider, trainerProgram);
-
+    let sdk: TrainerSDK;
+    let traderSDK: TrainerSDK;
+    let botSDK: TrainerSDK;
     const solutionKey = anchor.web3.Keypair.generate();
 
+    beforeEach(async () => {
+      sdk = SDK();
+      botSDK = await sdk.createSigner();
+      traderSDK = await sdk.createSigner();
+    });
+
     it("Creates a trader", async () => {
-      const user = await client.createUser();
-      const trader = await client.createTrader(user, 'Trader');
-      
-      expect(trader.account.user.toString(), 'Trader user is set').equals(user.key.publicKey.toString());
+      const trader = await traderSDK.createTrader('Trader');
+      expect(trader.account.user.toString(), 'Trader user is set').equals(traderSDK.provider.wallet.publicKey.toString());
       expect(trader.account.name, 'Trader name is set').equals('Trader');
     });
 
     it("Creates a exercice", async () => {
-      const authority = await client.createUser();
-      const exercice = await client.createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      const exercice = await botSDK.createExercise("bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim", 5);
 
-      expect(exercice.account.authority.toString(), 'Exercice authority is set').equals(authority.key.publicKey.toString());
-      expect(exercice.account.cid, 'Exercice cid is set').equals("QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      expect(exercice.account.authority.toString(), 'Exercice authority is set').equals(botSDK.provider.wallet.publicKey.toString());
+      expect(exercice.account.cid, 'Exercice cid is set').equals("bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
     }); 
 
     it("Creates multiples exercices", async () => {
-      const authority = await client.createUser();
-      const cids = ["QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8t1", "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8t2", "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8t3"];
-      const exercices = await client.createMultipleExercises(authority, cids);
+      const cids = ["bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi1", "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi2", "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi3"];
+      const exercices = await botSDK.createMultipleExercises(cids, 5);
 
       for (let i = 0; i < exercices.length; i++) {
         let exercice = exercices[i];
-        expect(exercice.account.authority.toString(), 'Exercice authority is set').equals(authority.key.publicKey.toString());
+        expect(exercice.account.authority.toString(), 'Exercice authority is set').equals(botSDK.provider.wallet.publicKey.toString());
         expect(exercice.account.cid, 'Exercice cid is set').equals(cids[i]);
       }
-
-      const updatedExercises = await client.getExercises(authority, {full: false, cid: 'QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8t1'});
-      console.log(updatedExercises);
-
     }); 
 
     it("Add a prediction", async () => {
-      const authority = await client.createUser();
-      const exercice = await client.createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
-      const user = await client.createUser();
-      const trader = await client.createTrader(user, 'Trader');
+      const exercice = await botSDK.createExercise("bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim", 5);
+      const trader = await traderSDK.createTrader('Trader');
 
-      const updatedExercise = await client.addPrediction(user, trader, exercice, authority, 30, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      await traderSDK.addPrediction(trader, exercice, 30, "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
+      const updatedExercise = await traderSDK.reloadExercise(exercice);
       const predictions = updatedExercise.account.predictions;
       expect(predictions.length, 'Prediction added').greaterThan(0);
       const prediction = predictions[predictions.length - 1];
@@ -61,58 +55,71 @@ describe('trainer', () => {
     }); 
 
     it("Add a outcome", async () => {
-      const authority = await client.createUser();
-      const exercice = await client.createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      const exercice = await botSDK.createExercise("bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim", 5);
 
-      const updatedExercise = await client.addOutcome(exercice, authority, 30, solutionKey.publicKey, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      await botSDK.addOutcome(exercice, 30, solutionKey.publicKey, "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
+      const updatedExercise = await botSDK.reloadExercise(exercice);
       expect(updatedExercise.account.outcome.toNumber(), 'Outcome is set').equals(30);
     }); 
 
     it("Check a prediction", async () => {
-      const authority = await client.createUser();
-      const exercice = await client.createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
-      const user = await client.createUser();
-      const trader = await client.createTrader(user, 'Trader');
+      const exercice = await botSDK.createExercise("bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim", 5, botSDK.provider.wallet.publicKey);
+      const trader = await traderSDK.createTrader('Trader', traderSDK.provider.wallet.publicKey);
 
-      const updatedExercisePrediction = await client.addPrediction(user, trader, exercice, authority, 0, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      await traderSDK.addPrediction(trader, exercice, 0, "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
+      const updatedExercisePrediction = await traderSDK.reloadExercise(exercice);
       expect(updatedExercisePrediction.account.predictions.length, 'Prediction added').greaterThan(0);
-      const updatedExerciseOutcome = await client.addOutcome(exercice, authority, 30, solutionKey.publicKey,"QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      
+      await botSDK.addOutcome(exercice, 30, solutionKey.publicKey, "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
+      const updatedExerciseOutcome = await botSDK.reloadExercise(exercice);
       expect(updatedExerciseOutcome.account.outcome.toNumber(), 'Outcome is set').equals(30);
-      await client.checkPrediction(user, trader, exercice, authority, 0, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
-      const updatedTrader = await client.updateTraderAccount(user, trader);
+      
+      await botSDK.checkPrediction(trader, exercice, 0, "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
+      const updatedTrader = await botSDK.reloadTraderAccount(trader);
       expect(updatedTrader.account.performance.toNumber(), 'Outcome is set').equals(35);
     }); 
 
     it("Check predictions", async () => {
-      const predictions_capacity = 7;
-      const authority = await client.createUser();
-      const exercice = await client.createExercise(authority, "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW", predictions_capacity);
-      const users = await client.createUsers(predictions_capacity);
-      const predictions = [-100, -50, -10, 0, 10, 50, 100];
+      const predictions_capacity = 5;
+      const exercice = await botSDK.createExercise("bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim", predictions_capacity);
+      const traderSDKs = await sdk.createSigners(predictions_capacity);
+      const predictions = [-10, 0, 10, 50, 100];
       // https://www.desmos.com/calculator/mqmwlpkyri
-      const performance = [0, 10, 30, 35, 40, 40, 15];
-      let traders = [];
+      const performance = [30, 35, 40, 40, 15];
+      let traders: any[] = [];
 
       for (let i = 0; i < predictions_capacity; i++) {
-        let user = users[i];
-        let trader = await client.createTrader(user, 'Trader');
+        let traderISDK = traderSDKs[i];
+        let trader = await traderISDK.createTrader('Trader');
 
-        let updatedExercisePrediction = await client.addPrediction(user, trader, exercice, authority, predictions[i], "QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+        await traderISDK.addPrediction(trader, exercice, predictions[i], "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
+        let updatedExercisePrediction: any = await traderISDK.reloadExercise(exercice);
         expect(updatedExercisePrediction.account.predictions.length, 'Prediction added').equals(i+1);
         
         traders.push(trader);
       }
       
-      const updatedExerciseOutcome = await client.addOutcome(exercice, authority, 30, solutionKey.publicKey,"QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      await botSDK.addOutcome(exercice, 30, solutionKey.publicKey,"bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
+      const updatedExerciseOutcome: any = await botSDK.reloadExercise(exercice);
       expect(updatedExerciseOutcome.account.outcome.toNumber(), 'Outcome is set').equals(30);
 
-      await client.checkMultiplePredictions(users, traders, exercice, authority, 0,"QmZmcRLEftCgd8AwsS8hKYSVPtFuEXy6cgWJqL1LEVj8tW");
+      await botSDK.checkMultiplePredictions(traders, exercice, 0,"bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim");
       
       for (let j = 0; j < predictions_capacity; j++) {
-        let user = users[j];
         let trader = traders[j];
-        const updatedTrader = await client.updateTraderAccount(user, trader);
+        const updatedTrader = await botSDK.reloadTraderAccount(trader);
         expect(updatedTrader.account.performance.toNumber(), 'Performance is set').equals(performance[j]);
       }
     }); 
   });
+
+
+  // TODO: Add tests for the following conditions:
+  // - The exercise is not found
+  // - The user is not found
+  // - The trader is not found
+  // - The prediction is not found
+  // - The prediction is already checked
+  // - The prediction is not in the range allowed
+  // - Same trader adds more than one prediction
+  // - Same user adds more than one outcome

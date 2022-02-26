@@ -1,25 +1,11 @@
-import * as anchor from '@project-serum/anchor';
-import { Program, Provider as AnchorProvider } from "@project-serum/anchor";
-import { publicKey } from '@project-serum/anchor/dist/cjs/utils';
-import type { Provider } from "@saberhq/solana-contrib";
-import {
-  SignerWallet,
-  SolanaProvider,
-  TransactionEnvelope
-} from "@saberhq/solana-contrib";
-import type { PublicKey, Signer } from "@solana/web3.js";
-import { Keypair, SystemProgram } from "@solana/web3.js";
-import {
-  TRAINER_PROGRAM_ID,
-  LAMPORTS_DECIMALS
-} from "./constants";
-import type {
-  TraderAccount,
-  ExerciseAccount,
-  Prediction,
-  TrainerProgram
-} from "./programs/trainer";
-import { TrainerJSON } from "./programs/trainer";
+import * as anchor from '@project-serum/anchor'
+import { Program, Provider as AnchorProvider } from '@project-serum/anchor'
+import type { Provider } from '@saberhq/solana-contrib'
+import { SignerWallet, SolanaProvider } from '@saberhq/solana-contrib'
+import type { PublicKey, Signer } from '@solana/web3.js'
+import { TRAINER_PROGRAM_ID } from './constants'
+import type { TrainerProgram } from './programs'
+import { TrainerJSON } from './programs/trainer'
 const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 const bs58 = require('base-x')(BASE58)
 
@@ -35,7 +21,7 @@ export class TrainerSDK {
   /**
    * Initialize from a Provider
    * @param provider
-   * @param trainerProgramID
+   * @param TrainerProgramID
    * @returns
    */
   static init(
@@ -49,7 +35,7 @@ export class TrainerSDK {
         TrainerProgramID,
         new AnchorProvider(provider.connection, provider.wallet, provider.opts)
       ) as unknown as TrainerProgram
-    );
+    )
   }
 
   /**
@@ -63,22 +49,20 @@ export class TrainerSDK {
         new SignerWallet(signer),
         this.provider.opts
       )
-    );
+    )
   }
 
   async getAccountBalance(publicKey = this.provider.wallet.publicKey) {
-    const account = await this.provider.connection.getAccountInfo(
-      publicKey
-    )
+    const account = await this.provider.connection.getAccountInfo(publicKey)
     return account?.lamports ?? 0
   }
 
   async getAirdrop({
     publicKey = this.provider.wallet.publicKey,
-    airdropBalance = 1 * anchor.web3.LAMPORTS_PER_SOL,
-  } : {
-    publicKey?: PublicKey;
-    airdropBalance?: number;
+    airdropBalance = anchor.web3.LAMPORTS_PER_SOL,
+  }: {
+    publicKey?: PublicKey
+    airdropBalance?: number
   }) {
     const sig = await this.provider.connection.requestAirdrop(
       publicKey,
@@ -127,15 +111,14 @@ export class TrainerSDK {
     return await this.program.account.trader.all(searchFilters)
   }
 
-  async createExercise(cid, predictions_capacity = 5, authority = this.provider.wallet.publicKey) {
+  async createExercise(
+    cid,
+    predictions_capacity = 5,
+    authority = this.provider.wallet.publicKey
+  ) {
     const [exercisePublicKey, bump] =
       await anchor.web3.PublicKey.findProgramAddress(
-        [
-          'exercise',
-          authority.toBytes(),
-          cid.slice(0, 32),
-          cid.slice(32, 64),
-        ],
+        ['exercise', authority.toBytes(), cid.slice(0, 32), cid.slice(32, 64)],
         this.program.programId
       )
 
@@ -160,7 +143,11 @@ export class TrainerSDK {
     }
   }
 
-  async createMultipleExercises(cids, predictions_capacity = 5, authority = this.provider.wallet.publicKey) {
+  async createMultipleExercises(
+    cids,
+    predictions_capacity = 5,
+    authority = this.provider.wallet.publicKey
+  ) {
     const instructions: any[] = []
     const exercisesPublicKeys: PublicKey[] = []
 
@@ -195,19 +182,14 @@ export class TrainerSDK {
           )
         )
       } else {
-        await this.program.rpc.createExercise(
-          cid,
-          predictions_capacity,
-          bump,
-          {
-            accounts: {
-              exercise: exercisePublicKey,
-              authority,
-              systemProgram: anchor.web3.SystemProgram.programId,
-            },
-            instructions,
-          }
-        )
+        await this.program.rpc.createExercise(cid, predictions_capacity, bump, {
+          accounts: {
+            exercise: exercisePublicKey,
+            authority,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          },
+          instructions,
+        })
       }
     }
 
@@ -215,9 +197,7 @@ export class TrainerSDK {
       exercisesPublicKeys.map(async (exercisePublicKey): Promise<any> => {
         return {
           publicKey: exercisePublicKey,
-          account: await this.program.account.exercise.fetch(
-            exercisePublicKey
-          ),
+          account: await this.program.account.exercise.fetch(exercisePublicKey),
         }
       })
     )
@@ -253,7 +233,13 @@ export class TrainerSDK {
     return await this.program.account.exercise.all(searchFilters)
   }
 
-  async addPrediction(trader, exercise, value, cid, authority = this.provider.wallet.publicKey) {
+  async addPrediction(
+    trader,
+    exercise,
+    value,
+    cid,
+    authority = this.provider.wallet.publicKey
+  ) {
     return await this.program.rpc.addPrediction(new anchor.BN(value), cid, {
       accounts: {
         exercise: exercise.publicKey,
@@ -264,7 +250,7 @@ export class TrainerSDK {
     })
   }
 
-  async addOutcome(exercise, outcome, solution_key, cid, authority = this.provider.wallet.publicKey) {
+  async addOutcome(exercise, outcome, solution_key, cid) {
     return await this.program.rpc.addOutcome(
       new anchor.BN(outcome),
       solution_key,
@@ -317,19 +303,19 @@ export class TrainerSDK {
     })
   }
 
-  async createSigner(airdropBalance = 1 * anchor.web3.LAMPORTS_PER_SOL) {
-    let signer = anchor.web3.Keypair.generate() as Signer;
-    let sdk = this.withSigner(signer);
-    await sdk.getAirdrop({airdropBalance});
-    return sdk;
+  async createSigner(airdropBalance = anchor.web3.LAMPORTS_PER_SOL) {
+    const signer = anchor.web3.Keypair.generate() as Signer
+    const sdk = this.withSigner(signer)
+    await sdk.getAirdrop({ airdropBalance })
+    return sdk
   }
 
   async createSigners(amount) {
-    let promises: any[] = [];
-    for(let i = 0; i < amount; i++) {
-      promises.push(await this.createSigner());
+    const promises: any[] = []
+    for (let i = 0; i < amount; i++) {
+      promises.push(await this.createSigner())
     }
 
-    return Promise.all(promises);
+    return Promise.all(promises)
   }
 }

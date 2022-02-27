@@ -6,7 +6,7 @@ import { SDK } from "./workspace";
 const expect = chai.expect;
 
 const CIDS = [
-  "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi1",
+  "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim",
   "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi2",
   "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi3",
 ];
@@ -55,7 +55,7 @@ describe("trainer", () => {
     }
   });
 
-  it("Add a validation", async () => {
+  it.only("Add a validation", async () => {
     const exercice = await botSDK.createExercise(CIDS[0], 5);
     const trader = await traderSDK.createTrader("Trader");
 

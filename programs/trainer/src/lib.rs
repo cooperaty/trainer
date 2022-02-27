@@ -1,6 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
 use std::cmp;
+use error::ErrorCode;
+use state::*;
+
+mod error;
+mod state;
 
 declare_id!("diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD");
 
@@ -8,83 +13,91 @@ declare_id!("diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD");
 pub mod trainer {
     use super::*;
 
-    pub fn create_trader(ctx: Context<CreateTrader>, name: String, bump: u8) -> Result<()> {
+    pub fn create_trader(ctx: Context<CreateTrader>, name: String) -> Result<()> {
         let trader = &mut ctx.accounts.trader;
         trader.user = *ctx.accounts.user.key;
         trader.name = name;
-        trader.bump = bump;
+
+        match ctx.bumps.get("trader") {
+            Some(&bump) => { trader.bump = bump; }
+            None => { return Err(ErrorCode::BumpNotFound.into()); }
+        }
 
         msg!("[TRAD] E: {}", &*trader.to_account_info().key.to_string());
         Ok(())
     }
 
-    pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, predictions_capacity: u8, bump: u8) -> Result<()> {
+    pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, validations_capacity: u8) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.full = false;
         exercise.cid = cid;
         exercise.authority = *ctx.accounts.authority.key;
-        exercise.predictions_capacity = predictions_capacity;
-        exercise.bump = bump;
+        exercise.validations_capacity = validations_capacity;
+
+        match ctx.bumps.get("exercise") {
+            Some(&bump) => { exercise.bump = bump; }
+            None => { return Err(ErrorCode::BumpNotFound.into()); }
+        }
 
         msg!("[EXER] E: {}", exercise.cid);
         Ok(())
     }
 
-    pub fn add_prediction(ctx: Context<AddPrediction>, value: i64, cid: String) -> Result<()> {
+    pub fn add_validation(ctx: Context<AddValidation>, value: i64, cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         let trader = &mut ctx.accounts.trader;
+        let user = &mut ctx.accounts.user;
         
-        // check user have not already added a prediction
-        for prediction in exercise.predictions.iter() {
-            if prediction.trader == *trader.to_account_info().key {
-                return Err(ErrorCode::DuplicatedPrediction.into());
+        // check user have not already added a validation
+        for validation in exercise.validations.iter() {
+            if validation.user == *user.to_account_info().key {
+                return Err(ErrorCode::DuplicatedValidation.into());
             }
         }
         
-        // add the prediction to the exercise
-        let prediction = Prediction {
+        // add the validation to the exercise
+        let validation = Validation {
             value,
             trader: *trader.to_account_info().key,
+            user: *user.to_account_info().key,
         };
-        exercise.predictions.push(prediction);
+        exercise.validations.push(validation);
 
-        msg!(&*trader.to_account_info().key.to_string());
-        msg!("[PRED] E: {} P: {} I: {}", cid, value, exercise.predictions.len() - 1);
-
+        msg!("[PRED] E: {} P: {} I: {}", cid, value, exercise.validations.len() - 1);
         Ok(())
     }
 
-    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, solution_key: Pubkey, cid: String) -> Result<()> {
+    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, solution_cid: String, cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.outcome = outcome;
-        exercise.solution_key = solution_key;
+        exercise.solution_cid = solution_cid;
 
-        msg!("[OUTCOME] E: {} Ps: {} O: {}", cid, outcome, exercise.predictions.len());
+        msg!("[OUTCOME] E: {} Ps: {} O: {}", cid, outcome, exercise.validations.len());
 
         Ok(())
     }
 
-    pub fn check_prediction(ctx: Context<CheckPrediction>, index: u8, _cid: String) -> Result<()> {
+    pub fn check_validation(ctx: Context<CheckValidation>, index: u8, _cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         let authority = &ctx.accounts.authority;
         let trader = &mut ctx.accounts.trader;
-        let prediction = exercise.predictions.get(index as usize).ok_or_else(|| ErrorCode::InvalidPredictionIndex)?;
+        let validation = exercise.validations.get(index as usize).ok_or_else(|| ErrorCode::InvalidValidationIndex)?;
 
-        // if trader is not the prediction's trader, then the prediction is invalid
-        if *trader.to_account_info().key != prediction.trader {
-            return Err(ErrorCode::WrongPredictionIndex.into());
+        // if trader is not the validation's trader, then the validation is invalid
+        if *trader.to_account_info().key != validation.trader {
+            return Err(ErrorCode::WrongValidationIndex.into());
         }
         
-        let rate = cmp::max(100-(prediction.value - exercise.outcome).abs(), 0) as u64;
+        let rate = cmp::max(100-(validation.value - exercise.outcome).abs(), 0) as u64;
         let performance = (trader.performance + rate) / 2;
         trader.performance = performance;
 
-        msg!("[CHECK] E: {} PP: {} PV: {}", index, performance, prediction.value);
+        msg!("[CHECK] E: {} PP: {} PV: {}", index, performance, validation.value);
         
-        // remove the prediction from the exercise to assure that it is not checked again
-        exercise.predictions.remove(index as usize);
+        // remove the validation from the exercise to assure that it is not checked again
+        exercise.validations.remove(index as usize);
         
-        if exercise.predictions.len() == 0 {
+        if exercise.validations.len() == 0 {
             exercise.close(authority.to_account_info())?;
         }
 
@@ -112,7 +125,7 @@ fn text_seed(text: &str, leftover: bool) -> &[u8] {
 }
 
 #[derive(Accounts)]
-#[instruction(name: String, bump: u8)]
+#[instruction(name: String)]
 pub struct CreateTrader<'info> {
     #[account(
         init,
@@ -121,16 +134,17 @@ pub struct CreateTrader<'info> {
             b"trader",
             text_seed(&name, false),
             user.to_account_info().key.as_ref()],
-        bump = bump,
+        bump,
         space = Trader::space(&name),
     )]
     pub trader: Account<'info, Trader>,
+    #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-#[instruction(cid: String, predictions_capacity: u8, bump: u8)]
+#[instruction(cid: String, validations_capacity: u8)]
 pub struct CreateExercise<'info> {
     #[account(
         init,
@@ -139,28 +153,27 @@ pub struct CreateExercise<'info> {
             authority.to_account_info().key.as_ref(),
             text_seed(&cid, false),
             text_seed(&cid, true)],
-        bump = bump,
+        bump,
         payer = authority,
-        space = Exercise::space(&cid, predictions_capacity),
+        space = Exercise::space(&cid, validations_capacity),
     )]
     pub exercise: Account<'info, Exercise>,
+    #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 #[instruction(value: i64, cid: String)]
-pub struct AddPrediction<'info> {
+pub struct AddValidation<'info> {
     #[account(mut, 
-        has_one = authority @ ErrorCode::WrongExerciseCreator, 
         seeds = [
             b"exercise", 
-            authority.key().as_ref(),
+            exercise.authority.as_ref(),
             text_seed(&cid, false),
             text_seed(&cid, true)],
         bump=exercise.bump)]
     pub exercise: Account<'info, Exercise>,
-    pub authority: AccountInfo<'info>,
     #[account(mut, 
         has_one = user @ ErrorCode::WrongUser, 
         seeds = [
@@ -173,7 +186,7 @@ pub struct AddPrediction<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(outcome: i64, solution_key: Pubkey, cid: String)]
+#[instruction(outcome: i64, solution_cid: String, cid: String)]
 pub struct AddOutcome<'info> {
     #[account(mut, 
         has_one = authority @ ErrorCode::WrongExerciseCreator, 
@@ -189,7 +202,7 @@ pub struct AddOutcome<'info> {
 
 #[derive(Accounts)]
 #[instruction(index: u8, cid: String)]
-pub struct CheckPrediction<'info> {
+pub struct CheckValidation<'info> {
     #[account(mut, 
         has_one = authority @ ErrorCode::WrongExerciseCreator, 
         seeds = [
@@ -201,76 +214,10 @@ pub struct CheckPrediction<'info> {
     pub exercise: Account<'info, Exercise>,
     pub authority: Signer<'info>,
     #[account(mut, 
-        has_one = user @ ErrorCode::WrongUser, 
         seeds = [
             b"trader", 
             text_seed(&trader.name, false), 
-            user.key().as_ref()],
+            trader.user.as_ref()],
         bump=trader.bump)]
     pub trader: Account<'info, Trader>,
-    pub user: AccountInfo<'info>,
-}
-
-#[account]
-pub struct Trader {
-    pub user: Pubkey,
-    pub name: String,
-    pub performance: u64,
-    pub bump: u8,
-}
-
-// Calculate the trader's data space
-impl Trader {
-    fn space(name: &str) -> usize {
-        // discriminator
-        8 +
-        // user + name + performance + bump
-        32 + (4 + name.len()) + 8 + 1
-    }
-}
-
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
-pub struct Prediction {
-    pub value: i64,
-    pub trader: Pubkey,
-}
-
-#[account]
-pub struct Exercise {
-    pub full: bool,
-    pub cid: String,
-    pub authority: Pubkey,
-    pub outcome: i64,
-    pub solution_key: Pubkey,
-    pub predictions_capacity: u8,
-    pub predictions: Vec<Prediction>,
-    pub bump: u8,
-}
-
-// Calculate the vote's data space
-impl Exercise {
-    fn space(cid: &str, predictions_capacity: u8) -> usize {
-        // discriminator
-        8 +
-        // full + cid + authority + outcome + solution_key + predictions_capacity +
-        1 + (4 + cid.len()) + 32 + 8 + 32 + 1 +
-        // vec of predictions +
-        4 + (predictions_capacity as usize) * std::mem::size_of::<Prediction>() +
-        // bump
-        1
-    }
-}
-
-#[error]
-pub enum ErrorCode {
-    #[msg("Specified exercise creator does not match the pubkey in the exercise")]
-    WrongExerciseCreator,
-    #[msg("Specified user does not match the pubkey in the trader")]
-    WrongUser,
-    #[msg("Specified prediction index does not match the pubkey in the trader")]
-    WrongPredictionIndex,
-    #[msg("Trader have already added a prediction")]
-    DuplicatedPrediction,
-    #[msg("Invalid prediction index")]
-    InvalidPredictionIndex
 }

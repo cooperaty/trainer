@@ -1,3 +1,3 @@
-export * from './trainer'
-export * from './constants'
-export * from './programs'
+export * from "./constants";
+export * from "./programs";
+export * from "./trainer";

@@ -1,8 +1,8 @@
-import { PublicKey } from '@solana/web3.js'
+import { PublicKey } from "@solana/web3.js";
 
 /**
  * Program ID of the Trainer program.
  */
 export const TRAINER_PROGRAM_ID = new PublicKey(
-  'diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD'
-)
+  "diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD"
+);

@@ -1,11 +1,14 @@
 [programs.localnet]
 trainer = "diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD"
 
+[programs.devnet]
+trainer = "diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD"
+
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [workspace]

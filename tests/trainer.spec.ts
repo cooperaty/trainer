@@ -11,6 +11,8 @@ const CIDS = [
   "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi3",
 ];
 
+const TIMEOUT_24H = new Date().getTime() + 60 * 60 * 24;
+
 describe("trainer", () => {
   console.log("🚀 Starting test...");
 
@@ -33,13 +35,16 @@ describe("trainer", () => {
   });
 
   it("Creates a exercice", async () => {
-    const exercice = await botSDK.createExercise(CIDS[0], 5);
+    const exercice = await botSDK.createExercise(CIDS[0], 5, TIMEOUT_24H);
 
     expect(
       exercice.account.authority.toString(),
       "Exercice authority is set"
     ).equals(botSDK.provider.wallet.publicKey.toString());
     expect(exercice.account.cid, "Exercice cid is set").equals(CIDS[0]);
+    expect(exercice.account.timeout.toNumber(), "Exercice cid is set").equals(
+      TIMEOUT_24H
+    );
   });
 
   it("Creates multiples exercices", async () => {
@@ -55,7 +60,7 @@ describe("trainer", () => {
     }
   });
 
-  it.only("Add a validation", async () => {
+  it("Add a validation", async () => {
     const exercice = await botSDK.createExercise(CIDS[0], 5);
     const trader = await traderSDK.createTrader("Trader");
 
@@ -81,11 +86,7 @@ describe("trainer", () => {
   });
 
   it("Check a validation", async () => {
-    const exercice = await botSDK.createExercise(
-      CIDS[0],
-      5,
-      botSDK.provider.wallet.publicKey
-    );
+    const exercice = await botSDK.createExercise(CIDS[0], 5);
     const trader = await traderSDK.createTrader(
       "Trader",
       traderSDK.provider.wallet.publicKey

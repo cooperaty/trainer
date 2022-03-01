@@ -8,7 +8,7 @@ trainer = "diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD"
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [workspace]

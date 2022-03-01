@@ -138,17 +138,23 @@ export class TrainerSDK {
   async createExercise(
     cid: string,
     validations_capacity = 5,
+    timeout: number = new Date().getTime() + 60 * 60 * 24,
     authority = this.provider.wallet.publicKey
   ) {
     const exercisePublicKey = await this.getExerciseAddress(authority, cid);
 
-    await this.program.rpc.createExercise(cid, validations_capacity, {
-      accounts: {
-        exercise: exercisePublicKey,
-        authority,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-    });
+    await this.program.rpc.createExercise(
+      cid,
+      validations_capacity,
+      new anchor.BN(timeout),
+      {
+        accounts: {
+          exercise: exercisePublicKey,
+          authority,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+      }
+    );
 
     return {
       publicKey: exercisePublicKey,
@@ -211,6 +217,7 @@ export class TrainerSDK {
   async createMultipleExercises(
     cids: string[],
     validations_capacity = 5,
+    timeout: number = new Date().getTime() + 60 * 60 * 24,
     authority = this.provider.wallet.publicKey
   ) {
     const instructions: anchor.web3.TransactionInstruction[] = [];
@@ -224,23 +231,33 @@ export class TrainerSDK {
 
       if (i < cids.length - 1) {
         instructions.push(
-          this.program.instruction.createExercise(cid, validations_capacity, {
+          this.program.instruction.createExercise(
+            cid,
+            validations_capacity,
+            new anchor.BN(timeout),
+            {
+              accounts: {
+                exercise: exercisePublicKey,
+                authority,
+                systemProgram: anchor.web3.SystemProgram.programId,
+              },
+            }
+          )
+        );
+      } else {
+        await this.program.rpc.createExercise(
+          cid,
+          validations_capacity,
+          new anchor.BN(timeout),
+          {
             accounts: {
               exercise: exercisePublicKey,
               authority,
               systemProgram: anchor.web3.SystemProgram.programId,
             },
-          })
+            instructions,
+          }
         );
-      } else {
-        await this.program.rpc.createExercise(cid, validations_capacity, {
-          accounts: {
-            exercise: exercisePublicKey,
-            authority,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          },
-          instructions,
-        });
       }
     }
 
@@ -339,7 +356,7 @@ export class TrainerSDK {
         cmp(8, bs58.encode(Buffer.from([filters.full ? 0x1 : 0x0])))
       );
     if ("cid" in filters && filters.cid)
-      searchFilters.push(cmp(13, bs58.encode(Buffer.from(filters.cid))));
+      searchFilters.push(cmp(21, bs58.encode(Buffer.from(filters.cid))));
 
     return await this.program.account.exercise.all(searchFilters);
   }

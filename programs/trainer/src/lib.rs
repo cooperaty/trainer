@@ -27,12 +27,13 @@ pub mod trainer {
         Ok(())
     }
 
-    pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, validations_capacity: u8) -> Result<()> {
+    pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, validations_capacity: u8, timeout: i64) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.full = false;
         exercise.cid = cid;
         exercise.authority = *ctx.accounts.authority.key;
         exercise.validations_capacity = validations_capacity;
+        exercise.timeout = timeout;
 
         match ctx.bumps.get("exercise") {
             Some(&bump) => { exercise.bump = bump; }
@@ -47,6 +48,17 @@ pub mod trainer {
         let exercise = &mut ctx.accounts.exercise;
         let trader = &mut ctx.accounts.trader;
         let user = &mut ctx.accounts.user;
+        let clock = Clock::get()?;
+
+        // check if the exercise is full
+        if exercise.full {
+            return Err(ErrorCode::ExerciseFull.into());
+        }
+
+        // check if the exercise is still active
+        if exercise.timeout < clock.unix_timestamp {
+            return Err(ErrorCode::ExerciseTimeout.into());
+        }
         
         // check user have not already added a validation
         for validation in exercise.validations.iter() {
@@ -73,7 +85,6 @@ pub mod trainer {
         exercise.solution_cid = solution_cid;
 
         msg!("[OUTCOME] E: {} Ps: {} O: {}", cid, outcome, exercise.validations.len());
-
         Ok(())
     }
 
@@ -144,7 +155,7 @@ pub struct CreateTrader<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(cid: String, validations_capacity: u8)]
+#[instruction(cid: String, validations_capacity: u8, timeout: i64)]
 pub struct CreateExercise<'info> {
     #[account(
         init,

@@ -14,4 +14,8 @@ pub enum ErrorCode {
   InvalidValidationIndex,
   #[msg("Bump not found")]
   BumpNotFound,
+  #[msg("Exercise timeout")]
+  ExerciseTimeout,
+  #[msg("Exercise full")]
+  ExerciseFull,
 }

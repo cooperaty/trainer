@@ -11,7 +11,7 @@ mod error;
 mod state;
 mod utils;
 
-declare_id!("diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD");
+declare_id!("E736fby166Ekp8cpTGbZPRFBZV6yq93xy4mMrXHEv22S");
 
 #[program]
 pub mod trainer {

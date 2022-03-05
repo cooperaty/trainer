@@ -1,8 +1,8 @@
 [programs.localnet]
-trainer = "diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD"
+trainer = "E736fby166Ekp8cpTGbZPRFBZV6yq93xy4mMrXHEv22S"
 
 [programs.devnet]
-trainer = "diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD"
+trainer = "E736fby166Ekp8cpTGbZPRFBZV6yq93xy4mMrXHEv22S"
 
 [registry]
 url = "https://anchor.projectserum.com"

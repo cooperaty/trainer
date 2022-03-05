@@ -131,6 +131,12 @@ pub mod trainer {
 
         Ok(())
     }
+
+    pub fn close_exercise(ctx: Context<CloseExercise>, _cid: String) -> Result<()> {
+        let exercise = &mut ctx.accounts.exercise;
+        exercise.close(ctx.accounts.authority.to_account_info())?;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -229,4 +235,19 @@ pub struct CheckValidation<'info> {
             trader.user.as_ref()],
         bump=trader.bump)]
     pub trader: Account<'info, Trader>,
+}
+
+#[derive(Accounts)]
+#[instruction(cid: String)]
+pub struct CloseExercise<'info> {
+    #[account(mut, 
+        has_one = authority @ ErrorCode::WrongExerciseCreator, 
+        seeds = [
+            b"exercise", 
+            authority.to_account_info().key.as_ref(),
+            text_seed(&cid, false),
+            text_seed(&cid, true)],
+        bump=exercise.bump)]
+    pub exercise: Account<'info, Exercise>,
+    pub authority: Signer<'info>,
 }

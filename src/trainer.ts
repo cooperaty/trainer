@@ -212,6 +212,18 @@ export class TrainerSDK {
     });
   }
 
+  async closeExercise(
+    exercise: ExerciseData,
+    authority = this.provider.wallet.publicKey
+  ) {
+    return await this.program.rpc.closeExercise(exercise.account.cid, {
+      accounts: {
+        exercise: exercise.publicKey,
+        authority,
+      },
+    });
+  }
+
   // INSTRUCTIONS MULTIPLE
 
   async createMultipleExercises(

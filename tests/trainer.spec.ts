@@ -163,6 +163,12 @@ describe("trainer", () => {
       ).equals(performance[j]);
     }
   });
+
+  it("Close exercise", async () => {
+    const exercice = await botSDK.createExercise(CIDS[0], 5);
+
+    await botSDK.closeExercise(exercice, botSDK.provider.wallet.publicKey);
+  });
 });
 
 // TODO: Add tests for the following conditions:

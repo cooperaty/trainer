@@ -2,10 +2,14 @@ use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
 use std::cmp;
 use error::ErrorCode;
+use events::*;
+use utils::*;
 use state::*;
 
+mod events;
 mod error;
 mod state;
+mod utils;
 
 declare_id!("diL5RAnRPxhckzBS6SXfB79ixSrJNATqw1FqEG7Y5GD");
 
@@ -16,21 +20,25 @@ pub mod trainer {
     pub fn create_trader(ctx: Context<CreateTrader>, name: String) -> Result<()> {
         let trader = &mut ctx.accounts.trader;
         trader.user = *ctx.accounts.user.key;
-        trader.name = name;
+        trader.name = name.clone();
 
         match ctx.bumps.get("trader") {
             Some(&bump) => { trader.bump = bump; }
             None => { return Err(ErrorCode::BumpNotFound.into()); }
         }
 
-        msg!("[TRAD] E: {}", &*trader.to_account_info().key.to_string());
+        emit!(NewTraderEvent {
+            user: *ctx.accounts.user.key,
+            name: name,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
         Ok(())
     }
 
     pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, validations_capacity: u8, timeout: i64) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.full = false;
-        exercise.cid = cid;
+        exercise.cid = cid.clone();
         exercise.authority = *ctx.accounts.authority.key;
         exercise.validations_capacity = validations_capacity;
         exercise.timeout = timeout;
@@ -40,51 +48,58 @@ pub mod trainer {
             None => { return Err(ErrorCode::BumpNotFound.into()); }
         }
 
-        msg!("[EXER] E: {}", exercise.cid);
+        emit!(NewExerciseEvent {
+            cid: cid,
+            timeout: timeout,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
         Ok(())
     }
 
-    pub fn add_validation(ctx: Context<AddValidation>, value: i64, cid: String) -> Result<()> {
+    pub fn add_validation(ctx: Context<AddValidation>, value: i64, _cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         let trader = &mut ctx.accounts.trader;
         let user = &mut ctx.accounts.user;
         let clock = Clock::get()?;
 
-        // check if the exercise is full
+        // Check if the exercise is full
         if exercise.full {
             return Err(ErrorCode::ExerciseFull.into());
         }
 
-        // check if the exercise is still active
+        // Check if the exercise is still active
         if exercise.timeout < clock.unix_timestamp {
             return Err(ErrorCode::ExerciseTimeout.into());
         }
         
-        // check user have not already added a validation
+        // Check user have not already added a validation
         for validation in exercise.validations.iter() {
             if validation.user == *user.to_account_info().key {
                 return Err(ErrorCode::DuplicatedValidation.into());
             }
         }
         
-        // add the validation to the exercise
-        let validation = Validation {
+        // Add the validation to the exercise
+        exercise.validations.push(Validation {
             value,
             trader: *trader.to_account_info().key,
             user: *user.to_account_info().key,
-        };
-        exercise.validations.push(validation);
+        });
 
-        msg!("[PRED] E: {} P: {} I: {}", cid, value, exercise.validations.len() - 1);
+        emit!(NewValidationEvent {
+            exercise: *exercise.to_account_info().key,
+            user: *user.to_account_info().key,
+            value: value,
+            index: exercise.validations.len() as u8,
+            timestamp: clock.unix_timestamp,
+        });
         Ok(())
     }
 
-    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, solution_cid: String, cid: String) -> Result<()> {
+    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, solution_cid: String, _cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.outcome = outcome;
         exercise.solution_cid = solution_cid;
-
-        msg!("[OUTCOME] E: {} Ps: {} O: {}", cid, outcome, exercise.validations.len());
         Ok(())
     }
 
@@ -94,7 +109,7 @@ pub mod trainer {
         let trader = &mut ctx.accounts.trader;
         let validation = exercise.validations.get(index as usize).ok_or_else(|| ErrorCode::InvalidValidationIndex)?;
 
-        // if trader is not the validation's trader, then the validation is invalid
+        // If trader is not the validation's trader, then the validation is invalid
         if *trader.to_account_info().key != validation.trader {
             return Err(ErrorCode::WrongValidationIndex.into());
         }
@@ -102,36 +117,19 @@ pub mod trainer {
         let rate = cmp::max(100-(validation.value - exercise.outcome).abs(), 0) as u64;
         let performance = (trader.performance + rate) / 2;
         trader.performance = performance;
-
-        msg!("[CHECK] E: {} PP: {} PV: {}", index, performance, validation.value);
         
-        // remove the validation from the exercise to assure that it is not checked again
+        // Remove the validation from the exercise to assure that it is not checked again
         exercise.validations.remove(index as usize);
         
         if exercise.validations.len() == 0 {
+            emit!(ExerciseValidatedEvent {
+                exercise: *exercise.to_account_info().key,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
             exercise.close(authority.to_account_info())?;
         }
 
         Ok(())
-    }
-}
-
-// Function to retrieve a max of 32 bytes from a string
-// Used to generate a PDA
-fn text_seed(text: &str, leftover: bool) -> &[u8] {
-    let b = text.as_bytes();
-    if b.len() > 32 {
-        if leftover {
-            if b.len() > 64 {
-                &b[32..64]
-            } else {
-                &b[32..] 
-            }
-        } else {
-            &b[0..32]
-        }
-    } else {
-        b
     }
 }
 

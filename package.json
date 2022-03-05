@@ -10,10 +10,10 @@
     "homepage": "https://cooperaty.org",
     "scripts": {
         "build": "rm -fr dist/ && tsc -P tsconfig.build.json && tsc -P tsconfig.esm.json",
+        "build:idl": "anchor build && ./scripts/parse-idls.sh && ./scripts/generate-idl-types.sh",
         "typecheck": "tsc",
         "idl:generate": "./scripts/parse-idls.sh && ./scripts/generate-idl-types.sh",
         "idl:generate:nolint": "./scripts/parse-idls.sh && RUN_ESLINT=none ./scripts/generate-idl-types.sh",
-        "build-idl": "anchor build && ./scripts/parse-idls.sh && ./scripts/generate-idl-types.sh",
         "lint": "eslint . --cache",
         "test:devnet": "anchor test --skip-build --skip-deploy --provider.cluster devnet tests/*.ts",
         "test:local": "anchor test --skip-build --provider.cluster localnet tests/*.ts",

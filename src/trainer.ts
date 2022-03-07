@@ -166,28 +166,25 @@ export class TrainerSDK {
     trader: TraderData,
     exercise: ExerciseData,
     value: number,
-    cid: string,
     authority: PublicKey = this.provider.wallet.publicKey
   ) {
-    return await this.program.rpc.addValidation(new anchor.BN(value), cid, {
-      accounts: {
-        exercise: exercise.publicKey,
-        trader: trader.publicKey,
-        user: authority,
-      },
-    });
+    return await this.program.rpc.addValidation(
+      new anchor.BN(value),
+      exercise.account.cid,
+      {
+        accounts: {
+          exercise: exercise.publicKey,
+          trader: trader.publicKey,
+          user: authority,
+        },
+      }
+    );
   }
 
-  async addOutcome(
-    exercise: ExerciseData,
-    outcome: number,
-    solution_cid: string,
-    cid: string
-  ) {
+  async addOutcome(exercise: ExerciseData, outcome: number) {
     return await this.program.rpc.addOutcome(
       new anchor.BN(outcome),
-      solution_cid,
-      cid,
+      exercise.account.cid,
       {
         accounts: {
           exercise: exercise.publicKey,
@@ -200,10 +197,9 @@ export class TrainerSDK {
   async checkValidation(
     trader: TraderData,
     exercise: ExerciseData,
-    index: number,
-    cid: string
+    index: number
   ) {
-    return await this.program.rpc.checkValidation(index, cid, {
+    return await this.program.rpc.checkValidation(index, exercise.account.cid, {
       accounts: {
         exercise: exercise.publicKey,
         authority: exercise.account.authority,
@@ -283,32 +279,34 @@ export class TrainerSDK {
     );
   }
 
-  async checkMultipleValidations(
-    traders: TraderData[],
-    exercise: ExerciseData,
-    index: number,
-    cid: string
-  ) {
+  async checkAllValidations(exercise: ExerciseData) {
     const instructions: anchor.web3.TransactionInstruction[] = [];
-    const lastTraderIndex = traders.length - 1;
+    const updatedExercise = await this.reloadExercise(exercise);
+    const lastTraderIndex = updatedExercise.account.validations.length - 1;
+
+    if (lastTraderIndex === -1) return;
 
     for (let i = 0; i < lastTraderIndex; i++) {
       instructions.push(
-        this.program.instruction.checkValidation(index, cid, {
-          accounts: {
-            exercise: exercise.publicKey,
-            authority: exercise.account.authority,
-            trader: traders[i].publicKey,
-          },
-        })
+        this.program.instruction.checkValidation(
+          0,
+          updatedExercise.account.cid,
+          {
+            accounts: {
+              exercise: updatedExercise.publicKey,
+              authority: updatedExercise.account.authority,
+              trader: updatedExercise.account.validations[i].trader,
+            },
+          }
+        )
       );
     }
 
-    await this.program.rpc.checkValidation(index, cid, {
+    await this.program.rpc.checkValidation(0, updatedExercise.account.cid, {
       accounts: {
-        exercise: exercise.publicKey,
-        authority: exercise.account.authority,
-        trader: traders[lastTraderIndex].publicKey,
+        exercise: updatedExercise.publicKey,
+        authority: updatedExercise.account.authority,
+        trader: updatedExercise.account.validations[lastTraderIndex].trader,
       },
       instructions,
     });
@@ -356,20 +354,44 @@ export class TrainerSDK {
     return await this.program.account.trader.all(searchFilters);
   }
 
-  async getFilteredExercises(filters: { full?: boolean; cid?: string } = {}) {
+  async getFilteredExercises(filters: { sealed?: boolean; cid?: string } = {}) {
     const cmp = (offset: number, bytes: string) => {
       return { memcmp: { offset, bytes } };
     };
 
     const searchFilters: anchor.web3.GetProgramAccountsFilter[] = [];
 
-    if ("full" in filters)
+    if ("sealed" in filters)
       searchFilters.push(
-        cmp(8, bs58.encode(Buffer.from([filters.full ? 0x1 : 0x0])))
+        cmp(8, bs58.encode(Buffer.from([filters.sealed ? 0x1 : 0x0])))
       );
     if ("cid" in filters && filters.cid)
       searchFilters.push(cmp(21, bs58.encode(Buffer.from(filters.cid))));
 
     return await this.program.account.exercise.all(searchFilters);
+  }
+
+  // LISTENERS
+
+  onExerciseChange(
+    exercisePublicKey: PublicKey,
+    callback: (exercise: ExerciseData["account"]) => void
+  ) {
+    const eventEmitter = this.program.account.exercise.subscribe(
+      exercisePublicKey,
+      this.provider.opts.commitment
+    );
+    eventEmitter.on("change", callback);
+  }
+
+  onTraderChange(
+    traderPublicKey: PublicKey,
+    callback: (trader: TraderData["account"]) => void
+  ) {
+    const eventEmitter = this.program.account.trader.subscribe(
+      traderPublicKey,
+      this.provider.opts.commitment
+    );
+    eventEmitter.on("change", callback);
   }
 }

@@ -31,7 +31,7 @@ pub struct Validation {
 
 #[account]
 pub struct Exercise {
-  pub full: bool,
+  pub sealed: bool,
   pub timeout: i64,
   pub cid: String,
   pub authority: Pubkey,
@@ -47,7 +47,7 @@ impl Exercise {
   pub fn space(cid: &str, validations_capacity: u8) -> usize {
     // discriminator
     8 +
-    // full + timeout + cid + authority + outcome + solution_cid + validations_capacity +
+    // sealed + timeout + cid + authority + outcome + solution_cid + validations_capacity +
     1 + 8 + (4 + cid.len()) + 32 + 8 + (4 + cid.len()) + 1 +
     // vec of validations +
     4 + (validations_capacity as usize) * std::mem::size_of::<Validation>() +

@@ -34,38 +34,38 @@ describe("trainer", () => {
     expect(trader.account.name, "Trader name is set").equals("Trader");
   });
 
-  it("Creates a exercice", async () => {
-    const exercice = await botSDK.createExercise(CIDS[0], 5, TIMEOUT_24H);
+  it("Creates a exercise", async () => {
+    const exercise = await botSDK.createExercise(CIDS[0], 5, TIMEOUT_24H);
 
     expect(
-      exercice.account.authority.toString(),
-      "Exercice authority is set"
+      exercise.account.authority.toString(),
+      "Exercise authority is set"
     ).equals(botSDK.provider.wallet.publicKey.toString());
-    expect(exercice.account.cid, "Exercice cid is set").equals(CIDS[0]);
-    expect(exercice.account.timeout.toNumber(), "Exercice cid is set").equals(
+    expect(exercise.account.cid, "Exercise cid is set").equals(CIDS[0]);
+    expect(exercise.account.timeout.toNumber(), "Exercise cid is set").equals(
       TIMEOUT_24H
     );
   });
 
-  it("Creates multiples exercices", async () => {
-    const exercices = await botSDK.createMultipleExercises(CIDS, 5);
+  it("Creates multiples exercises", async () => {
+    const exercises = await botSDK.createMultipleExercises(CIDS, 5);
 
-    for (let i = 0; i < exercices.length; i++) {
-      const exercice = exercices[i];
+    for (let i = 0; i < exercises.length; i++) {
+      const exercise = exercises[i];
       expect(
-        exercice.account.authority.toString(),
-        "Exercice authority is set"
+        exercise.account.authority.toString(),
+        "Exercise authority is set"
       ).equals(botSDK.provider.wallet.publicKey.toString());
-      expect(exercice.account.cid, "Exercice cid is set").equals(CIDS[i]);
+      expect(exercise.account.cid, "Exercise cid is set").equals(CIDS[i]);
     }
   });
 
   it("Add a validation", async () => {
-    const exercice = await botSDK.createExercise(CIDS[0], 5);
+    const exercise = await botSDK.createExercise(CIDS[0], 5);
     const trader = await traderSDK.createTrader("Trader");
 
-    await traderSDK.addValidation(trader, exercice, 30, CIDS[0]);
-    const updatedExercise = await traderSDK.reloadExercise(exercice);
+    await traderSDK.addValidation(trader, exercise, 30);
+    const updatedExercise = await traderSDK.reloadExercise(exercise);
     const validations = updatedExercise.account.validations;
     expect(validations.length, "Validation added").greaterThan(0);
     const validation = validations[validations.length - 1];
@@ -76,37 +76,37 @@ describe("trainer", () => {
   });
 
   it("Add a outcome", async () => {
-    const exercice = await botSDK.createExercise(CIDS[0], 5);
+    const exercise = await botSDK.createExercise(CIDS[0], 5);
 
-    await botSDK.addOutcome(exercice, 30, CIDS[1], CIDS[0]);
-    const updatedExercise = await botSDK.reloadExercise(exercice);
+    await botSDK.addOutcome(exercise, 30);
+    const updatedExercise = await botSDK.reloadExercise(exercise);
     expect(updatedExercise.account.outcome.toNumber(), "Outcome is set").equals(
       30
     );
   });
 
   it("Check a validation", async () => {
-    const exercice = await botSDK.createExercise(CIDS[0], 5);
+    const exercise = await botSDK.createExercise(CIDS[0], 5);
     const trader = await traderSDK.createTrader(
       "Trader",
       traderSDK.provider.wallet.publicKey
     );
 
-    await traderSDK.addValidation(trader, exercice, 0, CIDS[0]);
-    const updatedExerciseValidation = await traderSDK.reloadExercise(exercice);
+    await traderSDK.addValidation(trader, exercise, 0);
+    const updatedExerciseValidation = await traderSDK.reloadExercise(exercise);
     expect(
       updatedExerciseValidation.account.validations.length,
       "Validation added"
     ).greaterThan(0);
 
-    await botSDK.addOutcome(exercice, 30, CIDS[1], CIDS[0]);
-    const updatedExerciseOutcome = await botSDK.reloadExercise(exercice);
+    await botSDK.addOutcome(exercise, 30);
+    const updatedExerciseOutcome = await botSDK.reloadExercise(exercise);
     expect(
       updatedExerciseOutcome.account.outcome.toNumber(),
       "Outcome is set"
     ).equals(30);
 
-    await botSDK.checkValidation(trader, exercice, 0, CIDS[0]);
+    await botSDK.checkValidation(trader, exercise, 0);
     const updatedTrader = await botSDK.reloadTraderAccount(trader);
     expect(
       updatedTrader.account.performance.toNumber(),
@@ -114,9 +114,9 @@ describe("trainer", () => {
     ).equals(35);
   });
 
-  it("Check validations", async () => {
+  it.only("Check validations", async () => {
     const validations_capacity = 5;
-    const exercice: ExerciseData = await botSDK.createExercise(
+    const exercise: ExerciseData = await botSDK.createExercise(
       CIDS[0],
       validations_capacity
     );
@@ -128,13 +128,21 @@ describe("trainer", () => {
     const performance = [30, 35, 40, 40, 15];
     const traders: TraderData[] = [];
 
+    // onChange
+    traderSDKs[0].onExerciseChange(
+      exercise.publicKey,
+      (exercise: ExerciseData["account"]) => {
+        console.log("Exercise updated", exercise);
+      }
+    );
+
     for (let i = 0; i < validations_capacity; i++) {
       const traderISDK: TrainerSDK = traderSDKs[i];
       const trader = await traderISDK.createTrader("Trader");
 
-      await traderISDK.addValidation(trader, exercice, validations[i], CIDS[0]);
+      await traderISDK.addValidation(trader, exercise, validations[i]);
       const updatedExerciseValidation: ExerciseData =
-        await traderISDK.reloadExercise(exercice);
+        await traderISDK.reloadExercise(exercise);
       expect(
         updatedExerciseValidation.account.validations.length,
         "Validation added"
@@ -143,16 +151,16 @@ describe("trainer", () => {
       traders.push(trader);
     }
 
-    await botSDK.addOutcome(exercice, 30, CIDS[1], CIDS[0]);
+    await botSDK.addOutcome(exercise, 30);
     const updatedExerciseOutcome: ExerciseData = await botSDK.reloadExercise(
-      exercice
+      exercise
     );
     expect(
       updatedExerciseOutcome.account.outcome.toNumber(),
       "Outcome is set"
     ).equals(30);
 
-    await botSDK.checkMultipleValidations(traders, exercice, 0, CIDS[0]);
+    await botSDK.checkAllValidations(exercise);
 
     for (let j = 0; j < validations_capacity; j++) {
       const trader = traders[j];
@@ -165,9 +173,9 @@ describe("trainer", () => {
   });
 
   it("Close exercise", async () => {
-    const exercice = await botSDK.createExercise(CIDS[0], 5);
+    const exercise = await botSDK.createExercise(CIDS[0], 5);
 
-    await botSDK.closeExercise(exercice, botSDK.provider.wallet.publicKey);
+    await botSDK.closeExercise(exercise, botSDK.provider.wallet.publicKey);
   });
 });
 

@@ -36,8 +36,15 @@ pub mod trainer {
     }
 
     pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, validations_capacity: u8, timeout: i64) -> Result<()> {
+        if validations_capacity < 1 {
+            return Err(ErrorCode::ValidationsCapacityTooSmall.into());
+        }
+        if Clock::get()?.unix_timestamp > timeout {
+            return Err(ErrorCode::ExpiredTimeout.into());
+        }
+        
         let exercise = &mut ctx.accounts.exercise;
-        exercise.full = false;
+        exercise.sealed = false;
         exercise.cid = cid.clone();
         exercise.authority = *ctx.accounts.authority.key;
         exercise.validations_capacity = validations_capacity;
@@ -62,13 +69,14 @@ pub mod trainer {
         let user = &mut ctx.accounts.user;
         let clock = Clock::get()?;
 
-        // Check if the exercise is full
-        if exercise.full {
-            return Err(ErrorCode::ExerciseFull.into());
+        // Check if the exercise is sealed
+        if exercise.sealed {
+            return Err(ErrorCode::ExerciseSealed.into());
         }
 
         // Check if the exercise is still active
         if exercise.timeout < clock.unix_timestamp {
+            exercise.sealed = true;
             return Err(ErrorCode::ExerciseTimeout.into());
         }
         
@@ -86,6 +94,10 @@ pub mod trainer {
             user: *user.to_account_info().key,
         });
 
+        if exercise.validations.len() as u8 == exercise.validations_capacity {
+            exercise.sealed = true;
+        }
+
         emit!(NewValidationEvent {
             exercise: *exercise.to_account_info().key,
             user: *user.to_account_info().key,
@@ -96,10 +108,9 @@ pub mod trainer {
         Ok(())
     }
 
-    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, solution_cid: String, _cid: String) -> Result<()> {
+    pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, _cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
         exercise.outcome = outcome;
-        exercise.solution_cid = solution_cid;
         Ok(())
     }
 
@@ -201,7 +212,7 @@ pub struct AddValidation<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(outcome: i64, solution_cid: String, cid: String)]
+#[instruction(outcome: i64, cid: String)]
 pub struct AddOutcome<'info> {
     #[account(mut, 
         has_one = authority @ ErrorCode::WrongExerciseCreator, 

@@ -2,6 +2,10 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
+  #[msg("Validations capacity too small, must be greater than 0")]
+  ValidationsCapacityTooSmall,
+  #[msg("Expired timeout, it must be in the future")]
+  ExpiredTimeout,
   #[msg("Specified exercise creator does not match the pubkey in the exercise")]
   WrongExerciseCreator,
   #[msg("Specified user does not match the pubkey in the trader")]
@@ -16,6 +20,6 @@ pub enum ErrorCode {
   BumpNotFound,
   #[msg("Exercise timeout")]
   ExerciseTimeout,
-  #[msg("Exercise full")]
-  ExerciseFull,
+  #[msg("Exercise sealed")]
+  ExerciseSealed,
 }

@@ -5,11 +5,16 @@ import { SDK } from "./workspace";
 
 const expect = chai.expect;
 
-const CIDS = [
-  "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevim",
-  "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi2",
-  "bafkreieuenothwt6vlex57nlj3b7olib6qlbkgquk4orwa3oas2xanevi3",
-];
+const BASECID = "bafkreigyzpenio53l3z4f5l2rkwkjcbjnbgi7mfom6uaf2jczhdnbfktxu";
+
+const getRandomCIDs = (amount: number) => {
+  return Array(amount)
+    .fill(BASECID)
+    .map(
+      (cid: string) =>
+        cid.slice(0, 50) + Math.random().toString(12).substring(2, 10)
+    );
+};
 
 const TIMEOUT_24H = new Date().getTime() + 60 * 60 * 24;
 
@@ -19,11 +24,13 @@ describe("trainer", () => {
   let sdk: TrainerSDK;
   let traderSDK: TrainerSDK;
   let botSDK: TrainerSDK;
+  let CIDS: string[];
 
   beforeEach(async () => {
     sdk = SDK();
     botSDK = await sdk.createSigner();
     traderSDK = await sdk.createSigner();
+    CIDS = getRandomCIDs(5);
   });
 
   it("Creates a trader", async () => {
@@ -114,7 +121,7 @@ describe("trainer", () => {
     ).equals(35);
   });
 
-  it.only("Check validations", async () => {
+  it("Check validations", async () => {
     const validations_capacity = 5;
     const exercise: ExerciseData = await botSDK.createExercise(
       CIDS[0],
@@ -132,7 +139,10 @@ describe("trainer", () => {
     traderSDKs[0].onExerciseChange(
       exercise.publicKey,
       (exercise: ExerciseData["account"]) => {
-        console.log("Exercise updated", exercise);
+        expect(
+          exercise.validations.length,
+          "Validation correctly loaded"
+        ).lessThanOrEqual(validations_capacity);
       }
     );
 

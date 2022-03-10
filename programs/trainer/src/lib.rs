@@ -176,7 +176,6 @@ pub struct CreateExercise<'info> {
         init,
         seeds = [
             b"exercise", 
-            authority.to_account_info().key.as_ref(),
             text_seed(&cid, false),
             text_seed(&cid, true)],
         bump,
@@ -195,7 +194,6 @@ pub struct AddValidation<'info> {
     #[account(mut, 
         seeds = [
             b"exercise", 
-            exercise.authority.as_ref(),
             text_seed(&cid, false),
             text_seed(&cid, true)],
         bump=exercise.bump)]
@@ -218,7 +216,6 @@ pub struct AddOutcome<'info> {
         has_one = authority @ ErrorCode::WrongExerciseCreator, 
         seeds = [
             b"exercise", 
-            authority.to_account_info().key.as_ref(),
             text_seed(&cid, false),
             text_seed(&cid, true)],
         bump=exercise.bump)]
@@ -233,7 +230,6 @@ pub struct CheckValidation<'info> {
         has_one = authority @ ErrorCode::WrongExerciseCreator, 
         seeds = [
             b"exercise", 
-            authority.key().as_ref(),
             text_seed(&cid, false),
             text_seed(&cid, true)],
         bump=exercise.bump)]
@@ -255,7 +251,6 @@ pub struct CloseExercise<'info> {
         has_one = authority @ ErrorCode::WrongExerciseCreator, 
         seeds = [
             b"exercise", 
-            authority.to_account_info().key.as_ref(),
             text_seed(&cid, false),
             text_seed(&cid, true)],
         bump=exercise.bump)]

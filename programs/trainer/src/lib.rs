@@ -11,7 +11,7 @@ mod error;
 mod state;
 mod utils;
 
-declare_id!("E736fby166Ekp8cpTGbZPRFBZV6yq93xy4mMrXHEv22S");
+declare_id!("BDQCsoSkfhrNjzjQChgtHExVgrjNvwYKhkRibDLHDtY3");
 
 #[program]
 pub mod trainer {
@@ -27,6 +27,13 @@ pub mod trainer {
 
         params.min_validations = min_validations;
         params.authority = *ctx.accounts.authority.key;
+        Ok(())
+    }
+
+    pub fn modify_authority(ctx: Context<ModifyAuthority>) -> Result<()> {
+        let params = &mut ctx.accounts.params;
+
+        params.authority = *ctx.accounts.new_authority.key;
         Ok(())
     }
 
@@ -146,6 +153,11 @@ pub mod trainer {
 
     pub fn add_outcome(ctx: Context<AddOutcome>, outcome: i64, _cid: String) -> Result<()> {
         let exercise = &mut ctx.accounts.exercise;
+
+        if exercise.authority != *ctx.accounts.authority.key {
+            return Err(ErrorCode::WrongExerciseAuthority.into());
+        }
+
         exercise.outcome = outcome;
         Ok(())
     }
@@ -203,6 +215,20 @@ pub struct InitializeParams<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ModifyAuthority<'info> {
+    #[account(mut,
+        seeds = [b"params"],
+        bump = params.bump
+    )]
+    pub params: Account<'info, Params>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
+    pub new_authority: AccountInfo<'info>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct CreateTrainer<'info> {
     #[account(
         init,
@@ -216,6 +242,7 @@ pub struct CreateTrainer<'info> {
     pub trainer: Account<'info, Trainer>,
     #[account(mut)]
     pub authority: Signer<'info>,
+    /// CHECK: This is not dangerous because we don't read or write from this account
     pub trainer_authority: AccountInfo<'info>,
     #[account(mut, 
         seeds = [b"params"],

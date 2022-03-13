@@ -160,6 +160,27 @@ export class TrainerSDK {
     };
   }
 
+  async modifyAuthority(
+    newAuthority: PublicKey,
+    authority = this.provider.wallet.publicKey
+  ) {
+    const paramsPublicKey = await this.getParamsAddress();
+
+    await this.program.rpc.modifyAuthority({
+      accounts: {
+        params: paramsPublicKey,
+        newAuthority: newAuthority,
+        authority,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+    });
+
+    return {
+      publicKey: paramsPublicKey,
+      account: await this.program.account.params.fetch(paramsPublicKey),
+    };
+  }
+
   async createTrainer(
     trainerAuthority: PublicKey,
     authority = this.provider.wallet.publicKey

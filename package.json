@@ -18,7 +18,7 @@
         "test:devnet": "anchor test --skip-build --skip-deploy --provider.cluster devnet tests/*.ts",
         "test:local": "anchor test --skip-build --provider.cluster localnet tests/*.ts",
         "test:e2e": "anchor test --skip-build tests/*.ts",
-        "upgrade:devnet": "anchor upgrade target/deploy/trainer.so --provider.cluster devnet --program-id E736fby166Ekp8cpTGbZPRFBZV6yq93xy4mMrXHEv22S",
+        "upgrade:devnet": "anchor upgrade target/deploy/trainer.so --provider.cluster devnet --program-id BDQCsoSkfhrNjzjQChgtHExVgrjNvwYKhkRibDLHDtY3",
         "deploy:devnet": "anchor deploy --provider.cluster devnet"
     },
     "peerDependencies": {

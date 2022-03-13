@@ -35,7 +35,8 @@ describe("trainer", () => {
     botSDK = await sdk.createSigner();
     traderSDK = await sdk.createSigner();
     CIDS = getRandomCIDs(5);
-    await sdk.createTrainer(botSDK.provider.wallet.publicKey);
+    await sdk.modifyAuthority(botSDK.provider.wallet.publicKey);
+    await botSDK.createTrainer(botSDK.provider.wallet.publicKey);
   });
 
   it("Creates a trader", async () => {

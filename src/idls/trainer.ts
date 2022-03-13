@@ -31,6 +31,32 @@ export type TrainerIDL = {
       ];
     },
     {
+      name: "modifyAuthority";
+      accounts: [
+        {
+          name: "params";
+          isMut: true;
+          isSigner: false;
+        },
+        {
+          name: "newAuthority";
+          isMut: false;
+          isSigner: false;
+        },
+        {
+          name: "authority";
+          isMut: true;
+          isSigner: true;
+        },
+        {
+          name: "systemProgram";
+          isMut: false;
+          isSigner: false;
+        }
+      ];
+      args: [];
+    },
+    {
       name: "createTrainer";
       accounts: [
         {
@@ -484,51 +510,56 @@ export type TrainerIDL = {
     },
     {
       code: 6001;
+      name: "WrongExerciseAuthority";
+      msg: "Wrong exercise authority";
+    },
+    {
+      code: 6002;
       name: "ValidationsCapacityTooSmall";
       msg: "Validations capacity too small, must be greater than 0";
     },
     {
-      code: 6002;
+      code: 6003;
       name: "ExpiredTimeout";
       msg: "Expired timeout, it must be in the future";
     },
     {
-      code: 6003;
+      code: 6004;
       name: "WrongExerciseCreator";
       msg: "Specified exercise creator does not match the pubkey in the exercise";
     },
     {
-      code: 6004;
+      code: 6005;
       name: "WrongUser";
       msg: "Specified user does not match the pubkey in the trader";
     },
     {
-      code: 6005;
+      code: 6006;
       name: "WrongValidationIndex";
       msg: "Specified validation index does not match the pubkey in the trader";
     },
     {
-      code: 6006;
+      code: 6007;
       name: "DuplicatedValidation";
       msg: "Trader have already added a validation";
     },
     {
-      code: 6007;
+      code: 6008;
       name: "InvalidValidationIndex";
       msg: "Invalid validation index";
     },
     {
-      code: 6008;
+      code: 6009;
       name: "BumpNotFound";
       msg: "Bump not found";
     },
     {
-      code: 6009;
+      code: 6010;
       name: "ExerciseTimeout";
       msg: "Exercise timeout";
     },
     {
-      code: 6010;
+      code: 6011;
       name: "ExerciseSealed";
       msg: "Exercise sealed";
     }
@@ -563,6 +594,32 @@ export const TrainerJSON: TrainerIDL = {
           type: "u8",
         },
       ],
+    },
+    {
+      name: "modifyAuthority",
+      accounts: [
+        {
+          name: "params",
+          isMut: true,
+          isSigner: false,
+        },
+        {
+          name: "newAuthority",
+          isMut: false,
+          isSigner: false,
+        },
+        {
+          name: "authority",
+          isMut: true,
+          isSigner: true,
+        },
+        {
+          name: "systemProgram",
+          isMut: false,
+          isSigner: false,
+        },
+      ],
+      args: [],
     },
     {
       name: "createTrainer",
@@ -1018,51 +1075,56 @@ export const TrainerJSON: TrainerIDL = {
     },
     {
       code: 6001,
+      name: "WrongExerciseAuthority",
+      msg: "Wrong exercise authority",
+    },
+    {
+      code: 6002,
       name: "ValidationsCapacityTooSmall",
       msg: "Validations capacity too small, must be greater than 0",
     },
     {
-      code: 6002,
+      code: 6003,
       name: "ExpiredTimeout",
       msg: "Expired timeout, it must be in the future",
     },
     {
-      code: 6003,
+      code: 6004,
       name: "WrongExerciseCreator",
       msg: "Specified exercise creator does not match the pubkey in the exercise",
     },
     {
-      code: 6004,
+      code: 6005,
       name: "WrongUser",
       msg: "Specified user does not match the pubkey in the trader",
     },
     {
-      code: 6005,
+      code: 6006,
       name: "WrongValidationIndex",
       msg: "Specified validation index does not match the pubkey in the trader",
     },
     {
-      code: 6006,
+      code: 6007,
       name: "DuplicatedValidation",
       msg: "Trader have already added a validation",
     },
     {
-      code: 6007,
+      code: 6008,
       name: "InvalidValidationIndex",
       msg: "Invalid validation index",
     },
     {
-      code: 6008,
+      code: 6009,
       name: "BumpNotFound",
       msg: "Bump not found",
     },
     {
-      code: 6009,
+      code: 6010,
       name: "ExerciseTimeout",
       msg: "Exercise timeout",
     },
     {
-      code: 6010,
+      code: 6011,
       name: "ExerciseSealed",
       msg: "Exercise sealed",
     },

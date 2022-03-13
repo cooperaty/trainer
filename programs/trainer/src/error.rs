@@ -4,6 +4,8 @@ use anchor_lang::prelude::*;
 pub enum ErrorCode {
   #[msg("Wrong authority")]
   WrongAuthority,
+  #[msg("Wrong exercise authority")]
+  WrongExerciseAuthority,
   #[msg("Validations capacity too small, must be greater than 0")]
   ValidationsCapacityTooSmall,
   #[msg("Expired timeout, it must be in the future")]

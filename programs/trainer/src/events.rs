@@ -2,6 +2,16 @@ use anchor_lang::prelude::*;
 
 /// Emitted when an Trader is created
 #[event]
+pub struct NewTrainerEvent {
+  /// Trainer account
+  #[index]
+  pub authority: Pubkey,
+  /// Timestamp of the event
+  pub timestamp: i64,
+}
+
+/// Emitted when an Trader is created
+#[event]
 pub struct NewTraderEvent {
   /// User account
   #[index]

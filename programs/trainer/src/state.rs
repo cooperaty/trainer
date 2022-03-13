@@ -36,7 +36,6 @@ pub struct Exercise {
   pub cid: String,
   pub authority: Pubkey,
   pub outcome: i64,
-  pub solution_cid: String,
   pub validations_capacity: u8,
   pub validations: Vec<Validation>,
   pub bump: u8,
@@ -47,11 +46,44 @@ impl Exercise {
   pub fn space(cid: &str, validations_capacity: u8) -> usize {
     // discriminator
     8 +
-    // sealed + timeout + cid + authority + outcome + solution_cid + validations_capacity +
-    1 + 8 + (4 + cid.len()) + 32 + 8 + (4 + cid.len()) + 1 +
+    // sealed + timeout + cid + authority + outcome  + validations_capacity +
+    1 + 8 + (4 + cid.len()) + 32 + 8 + 1 +
     // vec of validations +
     4 + (validations_capacity as usize) * std::mem::size_of::<Validation>() +
     // bump
     1
+  }
+}
+
+#[account]
+pub struct Trainer {
+  pub authority: Pubkey,
+  pub bump: u8,
+}
+
+// Calculate the trainer's data space
+impl Trainer {
+  pub fn space() -> usize {
+    // discriminator
+    8 +
+    // authority + bump
+    32 + 1
+  }
+}
+
+#[account]
+pub struct Params {
+  pub authority: Pubkey,
+  pub min_validations: u8,
+  pub bump: u8,
+}
+
+// Calculate the params's data space
+impl Params {
+  pub fn space() -> usize {
+    // discriminator
+    8 +
+    // authority + min_validations + bump
+    32 + 1 + 1
   }
 }

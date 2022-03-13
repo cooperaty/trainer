@@ -10,6 +10,8 @@ type TrainerTypes = AnchorTypes<
   {
     trader: TraderAccount;
     exercise: ExerciseAccount;
+    trainer: TrainerAccount;
+    params: ParamsAccount;
   },
   {
     validation: ValidationStruct;
@@ -18,6 +20,8 @@ type TrainerTypes = AnchorTypes<
 
 export type TrainerProgram = TrainerTypes["Program"];
 
+export type ParamsAccount = TrainerTypes["Accounts"]["Params"];
+export type TrainerAccount = TrainerTypes["Accounts"]["Trainer"];
 export type TraderAccount = TrainerTypes["Accounts"]["Trader"];
 export type ExerciseAccount = TrainerTypes["Accounts"]["Exercise"];
 

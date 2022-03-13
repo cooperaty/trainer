@@ -96,6 +96,24 @@ export class TrainerSDK {
 
   // PDA ADDRESS
 
+  async getParamsAddress() {
+    const [paramsPublicKey] = await anchor.web3.PublicKey.findProgramAddress(
+      [anchor.utils.bytes.utf8.encode("params")],
+      this.program.programId
+    );
+    return paramsPublicKey;
+  }
+
+  async getTrainerAddress(
+    authority: PublicKey = this.provider.wallet.publicKey
+  ) {
+    const [trainerPublicKey] = await anchor.web3.PublicKey.findProgramAddress(
+      [anchor.utils.bytes.utf8.encode("trainer"), authority.toBuffer()],
+      this.program.programId
+    );
+    return trainerPublicKey;
+  }
+
   async getExerciseAddress(cid: string) {
     const [exercisePublicKey] = await anchor.web3.PublicKey.findProgramAddress(
       [
@@ -122,6 +140,49 @@ export class TrainerSDK {
 
   // INSTRUCTIONS
 
+  async initializeParams(
+    minValidations: number,
+    authority = this.provider.wallet.publicKey
+  ) {
+    const paramsPublicKey = await this.getParamsAddress();
+
+    await this.program.rpc.initializeParams(minValidations, {
+      accounts: {
+        params: paramsPublicKey,
+        authority,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+    });
+
+    return {
+      publicKey: paramsPublicKey,
+      account: await this.program.account.params.fetch(paramsPublicKey),
+    };
+  }
+
+  async createTrainer(
+    trainerAuthority: PublicKey,
+    authority = this.provider.wallet.publicKey
+  ) {
+    const trainerPublicKey = await this.getTrainerAddress(trainerAuthority);
+    const paramsPublicKey = await this.getParamsAddress();
+
+    await this.program.rpc.createTrainer({
+      accounts: {
+        trainer: trainerPublicKey,
+        trainerAuthority,
+        authority,
+        params: paramsPublicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+    });
+
+    return {
+      publicKey: trainerPublicKey,
+      account: await this.program.account.trainer.fetch(trainerPublicKey),
+    };
+  }
+
   async createTrader(name: string, user = this.provider.wallet.publicKey) {
     const traderPublicKey = await this.getTraderAddress(name, user);
 
@@ -145,7 +206,9 @@ export class TrainerSDK {
     timeout: number = new Date().getTime() + 60 * 60 * 24,
     authority = this.provider.wallet.publicKey
   ) {
+    const trainerPublicKey = await this.getTrainerAddress();
     const exercisePublicKey = await this.getExerciseAddress(cid);
+    const paramsPublicKey = await this.getParamsAddress();
 
     await this.program.rpc.createExercise(
       cid,
@@ -154,7 +217,9 @@ export class TrainerSDK {
       {
         accounts: {
           exercise: exercisePublicKey,
+          trainer: trainerPublicKey,
           authority,
+          params: paramsPublicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
         },
       }
@@ -232,6 +297,8 @@ export class TrainerSDK {
     timeout: number = new Date().getTime() + 60 * 60 * 24,
     authority = this.provider.wallet.publicKey
   ) {
+    const trainerPublicKey = await this.getTrainerAddress();
+    const paramsPublicKey = await this.getParamsAddress();
     const instructions: anchor.web3.TransactionInstruction[] = [];
     const exercisesPublicKeys: PublicKey[] = [];
 
@@ -250,7 +317,9 @@ export class TrainerSDK {
             {
               accounts: {
                 exercise: exercisePublicKey,
+                trainer: trainerPublicKey,
                 authority,
+                params: paramsPublicKey,
                 systemProgram: anchor.web3.SystemProgram.programId,
               },
             }
@@ -264,7 +333,9 @@ export class TrainerSDK {
           {
             accounts: {
               exercise: exercisePublicKey,
+              trainer: trainerPublicKey,
               authority,
+              params: paramsPublicKey,
               systemProgram: anchor.web3.SystemProgram.programId,
             },
             instructions,

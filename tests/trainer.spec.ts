@@ -26,11 +26,16 @@ describe("trainer", () => {
   let botSDK: TrainerSDK;
   let CIDS: string[];
 
-  beforeEach(async () => {
+  before(async () => {
     sdk = SDK();
+    await sdk.initializeParams(5);
+  });
+
+  beforeEach(async () => {
     botSDK = await sdk.createSigner();
     traderSDK = await sdk.createSigner();
     CIDS = getRandomCIDs(5);
+    await sdk.createTrainer(botSDK.provider.wallet.publicKey);
   });
 
   it("Creates a trader", async () => {

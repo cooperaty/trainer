@@ -17,15 +17,50 @@ declare_id!("E736fby166Ekp8cpTGbZPRFBZV6yq93xy4mMrXHEv22S");
 pub mod trainer {
     use super::*;
 
+    pub fn initialize_params(ctx: Context<InitializeParams>, min_validations: u8) -> Result<()> {
+        let params = &mut ctx.accounts.params;
+
+        match ctx.bumps.get("params") {
+            Some(&bump) => { params.bump = bump; }
+            None => { return Err(ErrorCode::BumpNotFound.into()); }
+        }
+
+        params.min_validations = min_validations;
+        params.authority = *ctx.accounts.authority.key;
+        Ok(())
+    }
+
+    pub fn create_trainer(ctx: Context<CreateTrainer>) -> Result<()> {
+        if ctx.accounts.params.authority != *ctx.accounts.authority.key {
+            return Err(ErrorCode::WrongAuthority.into());
+        }
+
+        let trainer = &mut ctx.accounts.trainer;
+
+        match ctx.bumps.get("trainer") {
+            Some(&bump) => { trainer.bump = bump; }
+            None => { return Err(ErrorCode::BumpNotFound.into()); }
+        }
+
+        trainer.authority = *ctx.accounts.trainer_authority.key;
+
+        emit!(NewTrainerEvent {
+            authority: *ctx.accounts.authority.key,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
     pub fn create_trader(ctx: Context<CreateTrader>, name: String) -> Result<()> {
         let trader = &mut ctx.accounts.trader;
-        trader.user = *ctx.accounts.user.key;
-        trader.name = name.clone();
 
         match ctx.bumps.get("trader") {
             Some(&bump) => { trader.bump = bump; }
             None => { return Err(ErrorCode::BumpNotFound.into()); }
         }
+
+        trader.user = *ctx.accounts.user.key;
+        trader.name = name.clone();
 
         emit!(NewTraderEvent {
             user: *ctx.accounts.user.key,
@@ -36,7 +71,7 @@ pub mod trainer {
     }
 
     pub fn create_exercise(ctx: Context<CreateExercise>, cid: String, validations_capacity: u8, timeout: i64) -> Result<()> {
-        if validations_capacity < 1 {
+        if validations_capacity < ctx.accounts.params.min_validations {
             return Err(ErrorCode::ValidationsCapacityTooSmall.into());
         }
         if Clock::get()?.unix_timestamp > timeout {
@@ -44,16 +79,17 @@ pub mod trainer {
         }
         
         let exercise = &mut ctx.accounts.exercise;
-        exercise.sealed = false;
-        exercise.cid = cid.clone();
-        exercise.authority = *ctx.accounts.authority.key;
-        exercise.validations_capacity = validations_capacity;
-        exercise.timeout = timeout;
 
         match ctx.bumps.get("exercise") {
             Some(&bump) => { exercise.bump = bump; }
             None => { return Err(ErrorCode::BumpNotFound.into()); }
         }
+
+        exercise.sealed = false;
+        exercise.cid = cid.clone();
+        exercise.authority = *ctx.accounts.authority.key;
+        exercise.validations_capacity = validations_capacity;
+        exercise.timeout = timeout;
 
         emit!(NewExerciseEvent {
             cid: cid,
@@ -151,6 +187,44 @@ pub mod trainer {
 }
 
 #[derive(Accounts)]
+#[instruction(min_validations: u8)]
+pub struct InitializeParams<'info> {
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"params"],
+        bump,
+        space = Params::space(),
+    )]
+    pub params: Account<'info, Params>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CreateTrainer<'info> {
+    #[account(
+        init,
+        payer = authority,
+        seeds = [
+            b"trainer",
+            trainer_authority.to_account_info().key.as_ref()],
+        bump,
+        space = Trainer::space(),
+    )]
+    pub trainer: Account<'info, Trainer>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub trainer_authority: AccountInfo<'info>,
+    #[account(mut, 
+        seeds = [b"params"],
+        bump=params.bump)]
+    pub params: Account<'info, Params>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 #[instruction(name: String)]
 pub struct CreateTrader<'info> {
     #[account(
@@ -183,8 +257,16 @@ pub struct CreateExercise<'info> {
         space = Exercise::space(&cid, validations_capacity),
     )]
     pub exercise: Account<'info, Exercise>,
+    #[account(mut, 
+        seeds = [b"trainer", authority.to_account_info().key.as_ref()],
+        bump=trainer.bump)]
+    pub trainer: Account<'info, Trainer>,
     #[account(mut)]
     pub authority: Signer<'info>,
+    #[account(mut, 
+        seeds = [b"params"],
+        bump=params.bump)]
+    pub params: Account<'info, Params>,
     pub system_program: Program<'info, System>,
 }
 

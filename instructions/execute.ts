@@ -1,16 +1,61 @@
+import { PublicKey } from "@solana/web3.js";
+
 import { SDK } from "./workspace";
+
+const DEFAULT_CID =
+  "bafkreibs4rp5yfkj26pmpy5si3g7tasparmhjn2blkll5vlzm4t3l7s2hy";
 
 async function execute() {
   const instruction = process.argv[2];
+  const sdk = SDK();
 
   switch (instruction) {
     case "initializeParams": {
-      const sdk = SDK();
-      await sdk.initializeParams(5);
+      console.log("🚀 Initialize params...");
+      const minValidations = parseInt(process.argv[3] || "5");
+      await sdk.initializeParams(minValidations);
+      console.log("✅ Done");
+      break;
+    }
+    case "createTrainer": {
+      console.log("🚀 Create trainer...");
+      const pubkey = process.argv[3]
+        ? new PublicKey(process.argv[3])
+        : sdk.provider.wallet.publicKey;
+      console.log("🔑 Public key:", pubkey.toString());
+      const trainer = await sdk.createTrainer(pubkey);
+      console.log("✅ Done", trainer);
+      break;
+    }
+    case "createExercise": {
+      console.log("🚀 Create exercise...");
+      const cid = process.argv[3] || DEFAULT_CID;
+      const exercise = await sdk.createExercise(cid);
+      console.log("✅ Done", exercise);
+      break;
+    }
+    case "checkExercise": {
+      const outcome = process.argv[3] ? parseInt(process.argv[3]) : 100;
+      const cid = process.argv[4] || DEFAULT_CID;
+      const exercise = await sdk.getFilteredExercises({ cid });
+      if (exercise?.length !== 1) console.error("Exercise not found");
+      console.log(`🚀 Checking exercise with outcome ${outcome}...`);
+      await sdk.addOutcome(exercise[0], outcome);
+      await sdk.checkAllValidations(exercise[0]);
+      console.log("✅ Done", exercise);
+      break;
+    }
+    case "closeExercise": {
+      console.log("🚀 Close exercise...");
+      const cid = process.argv[3] || DEFAULT_CID;
+      const exercise = await sdk.getFilteredExercises({ cid });
+      if (exercise?.length !== 1) console.error("Exercise not found");
+      const trainer = await sdk.closeExercise(exercise[0]);
+      console.log("✅ Done", trainer);
       break;
     }
     default: {
-      console.log("Unknown instruction:", instruction);
+      console.log("Unknown instruction", instruction);
     }
   }
 }

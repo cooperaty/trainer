@@ -181,6 +181,26 @@ export class TrainerSDK {
     };
   }
 
+  async modifyMinValidations(
+    minValidations: number,
+    authority = this.provider.wallet.publicKey
+  ) {
+    const paramsPublicKey = await this.getParamsAddress();
+
+    await this.program.rpc.modifyMinValidations(minValidations, {
+      accounts: {
+        params: paramsPublicKey,
+        authority,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+    });
+
+    return {
+      publicKey: paramsPublicKey,
+      account: await this.program.account.params.fetch(paramsPublicKey),
+    };
+  }
+
   async createTrainer(
     trainerAuthority: PublicKey,
     authority = this.provider.wallet.publicKey
@@ -471,13 +491,23 @@ export class TrainerSDK {
 
   onExerciseChange(
     exercisePublicKey: PublicKey,
-    callback: (exercise: ExerciseData["account"]) => void
+    callback: (exercise: ExerciseData | null) => Promise<void>
   ) {
-    const eventEmitter = this.program.account.exercise.subscribe(
+    this.provider.connection.onAccountChange(
       exercisePublicKey,
+      (info, _context) => {
+        if (!info.data.length) {
+          void callback(null);
+        } else {
+          const exerciseData: ExerciseData = {
+            publicKey: exercisePublicKey,
+            account: this.program.coder.accounts.decode("Exercise", info.data),
+          } as ExerciseData;
+          void callback(exerciseData);
+        }
+      },
       this.provider.opts.commitment
     );
-    eventEmitter.on("change", callback);
   }
 
   onTraderChange(

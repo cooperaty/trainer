@@ -1,5 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 
+import type { ExerciseData } from "../src";
 import { SDK } from "./workspace";
 
 const DEFAULT_CID =
@@ -11,6 +12,13 @@ async function execute() {
 
   switch (instruction) {
     case "initializeParams": {
+      console.log("🚀 Initialize params...");
+      const minValidations = parseInt(process.argv[3] || "5");
+      await sdk.initializeParams(minValidations);
+      console.log("✅ Done");
+      break;
+    }
+    case "modifyParams": {
       console.log("🚀 Initialize params...");
       const minValidations = parseInt(process.argv[3] || "5");
       await sdk.initializeParams(minValidations);
@@ -43,6 +51,26 @@ async function execute() {
       await sdk.addOutcome(exercise[0], outcome);
       await sdk.checkAllValidations(exercise[0]);
       console.log("✅ Done", exercise);
+      break;
+    }
+    case "listenExercise": {
+      const outcome = process.argv[3] ? parseInt(process.argv[3]) : 100;
+      const cid = process.argv[4] || DEFAULT_CID;
+      const exercisePubkey = await sdk.getExerciseAddress(cid);
+      if (!exercisePubkey) console.error("Exercise not found");
+      console.log(`🚀 Listening exercise with outcome ${outcome}...`);
+      sdk.onExerciseChange(
+        exercisePubkey,
+        async (exercise: ExerciseData | null) => {
+          console.log("🔔 Exercise changed", exercise);
+          if (!exercise) console.error("✅ Done");
+          if (exercise?.account?.sealed) {
+            console.log(`🚀 Checking exercise with outcome ${outcome}...`);
+            await sdk.addOutcome(exercise, outcome);
+            await sdk.checkAllValidations(exercise);
+          }
+        }
+      );
       break;
     }
     case "closeExercise": {

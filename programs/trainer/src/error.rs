@@ -6,6 +6,8 @@ pub enum ErrorCode {
   WrongAuthority,
   #[msg("Wrong exercise authority")]
   WrongExerciseAuthority,
+  #[msg("Min validations too small, must be greater than 0")]
+  MinValidationsTooLow,
   #[msg("Validations capacity too small, must be greater than 0")]
   ValidationsCapacityTooSmall,
   #[msg("Expired timeout, it must be in the future")]

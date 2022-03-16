@@ -37,6 +37,21 @@ pub mod trainer {
         Ok(())
     }
 
+    pub fn modify_min_validations(ctx: Context<ModifyMinValidations>, min_validations: u8) -> Result<()> {
+        if ctx.accounts.params.authority != *ctx.accounts.authority.key {
+            return Err(ErrorCode::WrongAuthority.into());
+        }
+        
+        let params = &mut ctx.accounts.params;
+
+        if min_validations < 1 {
+            return Err(ErrorCode::MinValidationsTooLow.into());
+        }
+
+        params.min_validations = min_validations;
+        Ok(())
+    }
+
     pub fn create_trainer(ctx: Context<CreateTrainer>) -> Result<()> {
         if ctx.accounts.params.authority != *ctx.accounts.authority.key {
             return Err(ErrorCode::WrongAuthority.into());
@@ -223,6 +238,18 @@ pub struct ModifyAuthority<'info> {
     pub params: Account<'info, Params>,
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub new_authority: AccountInfo<'info>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ModifyMinValidations<'info> {
+    #[account(mut,
+        seeds = [b"params"],
+        bump = params.bump
+    )]
+    pub params: Account<'info, Params>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,

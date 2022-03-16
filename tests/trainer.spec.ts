@@ -28,7 +28,8 @@ describe("trainer", () => {
 
   before(async () => {
     sdk = SDK();
-    await sdk.initializeParams(5);
+    await sdk.initializeParams(10);
+    await sdk.modifyMinValidations(5);
   });
 
   beforeEach(async () => {

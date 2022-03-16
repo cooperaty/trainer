@@ -18,10 +18,21 @@ async function execute() {
       console.log("✅ Done");
       break;
     }
-    case "modifyParams": {
-      console.log("🚀 Initialize params...");
+    case "modifyMinValidations": {
       const minValidations = parseInt(process.argv[3] || "5");
-      await sdk.initializeParams(minValidations);
+      console.log(
+        `🚀 Modifying min validations param to value ${minValidations}...`
+      );
+      await sdk.modifyMinValidations(minValidations);
+      console.log("✅ Done");
+      break;
+    }
+    case "modifyAuthority": {
+      console.log("🚀 Modifying authority param...");
+      const authority = process.argv[3]
+        ? new PublicKey(process.argv[3])
+        : sdk.provider.wallet.publicKey;
+      await sdk.modifyAuthority(authority);
       console.log("✅ Done");
       break;
     }

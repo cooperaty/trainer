@@ -21,6 +21,8 @@
         "test:e2e": "anchor test --skip-build tests/*.ts",
         "upgrade:devnet": "anchor upgrade target/deploy/trainer.so --provider.cluster devnet --program-id BDQCsoSkfhrNjzjQChgtHExVgrjNvwYKhkRibDLHDtY3",
         "deploy:devnet": "anchor deploy --provider.cluster devnet",
+        "upgrade:dao:write": "solana program write-buffer target/deploy/trainer.so",
+        "upgrade:dao:auth": "solana program set-buffer-authority --new-buffer-authority 8HAQe1zGUjTjwM84556UF8i9s9WRx9uvGop8FU9Ls5S8",
         "ins": "yarn ts-node instructions/execute.ts"
     },
     "peerDependencies": {
